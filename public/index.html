@@ -332,10 +332,11 @@
       <input type="range" min="0" max="100" value="100" id="masterVol" style="max-width:200px">
       <span id="masterVal">100%</span>
     </div>
-    <div class="status-bar">STATUS: ONLINE</div>
+    <div class="status-bar" id="connectionStatus">STATUS: ONLINE</div>
   </div>
 
-  <div class="cols">
+  <!-- Only show channel controls for DJ -->
+  <div id="djControls" class="cols djOnly">
     <div class="card channel-card chA">
       <h3 class="channel-title">🌊 CHANNEL A [AMBIENCE]</h3>
       <div class="status-bar">ACTIVE: <span id="nowTitleA" class="now-playing">NONE</span></div>
@@ -401,6 +402,8 @@ const ytPlayers = { A: null, B: null };
 const audio = { A: document.getElementById("audioA"), B: document.getElementById("audioB") };
 let localMaster = 1, roomVol = { A: 1, B: 1 }, channelType = { A: null, B: null };
 
+console.log("🔌 Socket.IO initialized");
+
 async function createRoom() {
   const name = document.getElementById("newRoomName").value.trim();
   const res = await fetch("/api/rooms", { method: "POST", headers: {"Content-Type":"application/json"}, body: JSON.stringify({ roomId: name }) });
@@ -418,13 +421,73 @@ function enterRoom(isDj) { location.href = "/?room=" + (pendingRoom || roomId); 
 const urlRoom = params.get("room");
 if (urlRoom) {
   djToken = localStorage.getItem("dj-" + urlRoom) || null;
-  roomId = urlRoom;
+  roomId = urlRoom.replace(/[^a-z0-9-]/g, ""); // Clean room ID
+  
+  socket.on('connect', () => {
+    console.log("✅ Socket connected, joining room:", roomId);
+    document.getElementById("connectionStatus").textContent = "STATUS: ONLINE";
+  });
+  
+  socket.on('disconnect', () => {
+    console.log("❌ Socket disconnected");
+    document.getElementById("connectionStatus").textContent = "STATUS: DISCONNECTED";
+  });
+  
+  socket.on("state", (room) => {
+    console.log("📬 Received state event");
+    paint(room.channelA, "A"); 
+    paint(room.channelB, "B");
+  });
+  
+  socket.on("playlistUpdate", ({channelA, channelB}) => {
+    console.log("📬 Received playlist update");
+    paint(channelA, "A"); 
+    paint(channelB, "B");
+  });
+  
+  socket.on("nowPlaying", ({ channel, type, src, title, playing }) => {
+    console.log("📬 Now playing on channel:", channel, title);
+    document.getElementById("nowTitle" + channel).textContent = title || "NONE";
+    document.getElementById("play" + channel).textContent = playing ? "⏸" : "▶";
+    if (!src) { audio[channel].pause(); if (ytPlayers[channel]?.stopVideo) ytPlayers[channel].stopVideo(); channelType[channel] = null; return; }
+    channelType[channel] = type;
+    if (type === "file") {
+      if (audio[channel].src !== src) audio[channel].src = src;
+      audio[channel].currentTime = 0; playWithFade(channel);
+      if (ytPlayers[channel]?.stopVideo) ytPlayers[channel].stopVideo();
+    } else { audio[channel].pause(); startYT(channel, src); }
+  });
+  
+  socket.on("playbackState", ({ channel, playing }) => {
+    document.getElementById("play" + channel).textContent = playing ? "⏸" : "▶";
+    if (channelType[channel] === "file") playing ? audio[channel].play().catch(console.warn) : audio[channel].pause();
+    else if (ytPlayers[channel]) playing ? ytPlayers[channel].playVideo() : ytPlayers[channel].pauseVideo();
+  });
+  
+  socket.on("volumeChange", ({ channel, volume }) => {
+    roomVol[channel] = volume/100;
+    document.getElementById("vol" + channel).value = volume;
+    document.getElementById("volVal" + channel).textContent = volume + "%";
+    applyVolumes();
+  });
+  
+  socket.on("roomNotFound", () => {
+    alert("Session not found (may have expired). Create a new room.");
+    location.href = "/";
+  });
+  
   socket.emit("join", roomId);
+  
   document.getElementById("landing").classList.add("hidden");
   document.getElementById("room").classList.remove("hidden");
   document.getElementById("roomLabel").textContent = roomId;
   document.getElementById("roleLabel").textContent = djToken ? "PRIMARY OPERATOR 🎛️" : "LISTENER MODE";
-  if (!djToken) document.querySelectorAll(".djOnly").forEach(el => el.classList.add("hidden"));
+  
+  // FIX: Hide channel controls for listeners
+  if (!djToken) {
+    document.querySelectorAll(".djOnly").forEach(el => el.classList.add("hidden"));
+    document.getElementById("djControls").classList.add("hidden");
+  }
 }
 
 function dj(action, payload) { 

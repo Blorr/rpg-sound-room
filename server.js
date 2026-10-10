@@ -10,7 +10,7 @@ app.use(express.static("public"));
 const server = http.createServer(app);
 const io = new Server(server);
 
-// Initialize empty channel (keeps tracks, clears playback state)
+// Initialize empty channel
 const blankChannel = () => ({ tracks: [], currentIndex: -1, playing: false, position: 0, updatedAt: Date.now(), volume: 100 });
 
 // Store rooms: { roomId -> { djToken, channelA, channelB, crossfade } }
@@ -31,6 +31,7 @@ app.post("/api/rooms", (req, res) => {
     crossfade: 3 
   });
   
+  console.log(`📦 Created room: ${id}`);
   res.json({ roomId: id, djToken });
 });
 
@@ -65,16 +66,24 @@ io.on("connection", (socket) => {
 
   // Join a room
   socket.on("join", (id) => {
-    if (!rooms.has(id)) return socket.emit("roomNotFound");
+    if (!rooms.has(id)) {
+      console.log(`❌ Room ${id} not found!`);
+      return socket.emit("roomNotFound");
+    }
     roomId = id;
     socket.join(roomId);
-    socket.emit("state", rooms.get(roomId));
+    const room = rooms.get(roomId);
+    socket.emit("state", room); // Send initial state immediately
+    console.log(`🔗 Client joined room: ${roomId}, total: ${io.sockets.adapter.rooms.get(roomId)?.size}`);
+    console.log(`📊 Room has ${room.channelA.tracks.length + room.channelB.tracks.length} tracks`);
   });
 
   // DJ-authenticated actions
   socket.on("dj", ({ token, action, payload }) => {
     const room = rooms.get(roomId);
-    if (!room || token !== room.djToken) return; // silently ignore non-DJs
+    if (!room) return console.log("❌ Room not found for DJ action");
+    if (token !== room.djToken) return console.log("❌ Invalid DJ token");
+    console.log(`🎛️ DJ action: ${action} on channel ${payload?.channel}`);
     handleAction(action, payload, room, roomId);
   });
 
@@ -95,6 +104,7 @@ io.on("connection", (socket) => {
       ch.playing = true;
       ch.position = 0;
       ch.updatedAt = now;
+      console.log(`🔄 Auto-advance to track ${ch.currentIndex + 1} on channel ${channel}`);
       io.to(roomId).emit("nowPlaying", { 
         channel, 
         ...ch.tracks[ch.currentIndex], 
@@ -104,31 +114,62 @@ io.on("connection", (socket) => {
     }
   });
 
+  // Force sync state (debugging helper)
+  socket.on("sync", ({ token }) => {
+    const room = rooms.get(roomId);
+    if (!room || token !== room.djToken) return;
+    
+    ["A", "B"].forEach(chId => {
+      const ch = chId === "A" ? room.channelA : room.channelB;
+      if (ch.currentIndex >= 0 && ch.tracks[ch.currentIndex]) {
+        io.to(roomId).emit("nowPlaying", { 
+          channel: chId, 
+          ...ch.tracks[ch.currentIndex], 
+          playing: ch.playing, 
+          volume: ch.volume 
+        });
+      }
+    });
+    console.log(`🔄 Forced state sync to ${io.sockets.adapter.rooms.get(roomId)?.size} clients`);
+  });
+
   // Clean up empty rooms after 10 minutes
   socket.on("disconnect", () => {
     if (!roomId) return;
     const stillHere = io.sockets.adapter.rooms.get(roomId)?.size ?? 0;
     if (stillHere === 0) setTimeout(() => {
-      if ((io.sockets.adapter.rooms.get(roomId)?.size ?? 0) === 0) rooms.delete(roomId);
+      if ((io.sockets.adapter.rooms.get(roomId)?.size ?? 0) === 0) {
+        rooms.delete(roomId);
+        console.log(`🗑️ Deleted empty room: ${roomId}`);
+      }
     }, 10 * 60 * 1000);
   });
 });
 
 // === HANDLE DJ ACTIONS ===
 function handleAction(action, p, room, roomId) {
+  if (!p || !p.channel) {
+    console.log("⚠️ Missing payload/channel in DJ action");
+    return;
+  }
   const ch = p.channel === "A" ? room.channelA : room.channelB;
   
   switch (action) {
     case "queue":
       ch.tracks.push({ type: p.type, src: p.src, title: p.title });
+      console.log(`➕ Queued "${p.title}" to channel ${p.channel}`);
       break;
       
     case "playTrack":
-      if (p.index < 0 || p.index >= ch.tracks.length) return;
+      if (p.index < 0 || p.index >= ch.tracks.length) {
+        console.log(`⚠️ Invalid track index: ${p.index}`);
+        return;
+      }
       ch.currentIndex = p.index;
       ch.playing = true;
       ch.position = 0;
       ch.updatedAt = Date.now();
+      console.log(`▶️ Playing track ${p.index} on channel ${p.channel}`);
       io.to(roomId).emit("nowPlaying", { 
         channel: p.channel, 
         ...ch.tracks[p.index], 
@@ -138,6 +179,7 @@ function handleAction(action, p, room, roomId) {
       break;
       
     case "prev":
+      console.log(`⏮ Prev on channel ${p.channel}, currentIndex: ${ch.currentIndex}`);
       if (ch.currentIndex > 0) {
         ch.currentIndex--;
         ch.playing = true;
@@ -149,11 +191,14 @@ function handleAction(action, p, room, roomId) {
           playing: true, 
           volume: ch.volume 
         });
+      } else {
+        console.log(`  └─ Already at first track (or no track selected)`);
       }
       break;
       
     case "next":
-      if (ch.currentIndex < ch.tracks.length - 1) {
+      console.log(`⏭ Next on channel ${p.channel}, currentIndex: ${ch.currentIndex}`);
+      if (ch.currentIndex >= 0 && ch.currentIndex < ch.tracks.length - 1) {
         ch.currentIndex++;
         ch.playing = true;
         ch.position = 0;
@@ -164,6 +209,8 @@ function handleAction(action, p, room, roomId) {
           playing: true, 
           volume: ch.volume 
         });
+      } else {
+        console.log(`  └─ Already at last track (tracks: ${ch.tracks.length})`);
       }
       break;
       
@@ -180,12 +227,33 @@ function handleAction(action, p, room, roomId) {
           playing: false 
         });
       }
+      console.log(`🗑️ Removed track ${p.index} on channel ${p.channel}`);
       break;
       
     case "toggle":
-      if (ch.currentIndex < 0) return;
+      // If no track is selected, start from the beginning
+      if (ch.currentIndex < 0) {
+        if (ch.tracks.length === 0) {
+          console.log(`⚠️ No tracks to play on channel ${p.channel}`);
+          return;
+        }
+        ch.currentIndex = 0;
+        ch.playing = true;
+        ch.position = 0;
+        ch.updatedAt = Date.now();
+        console.log(`▶️ Auto-started first track on channel ${p.channel}`);
+        io.to(roomId).emit("nowPlaying", { 
+          channel: p.channel, 
+          ...ch.tracks[ch.currentIndex], 
+          playing: true, 
+          volume: ch.volume 
+        });
+        break;
+      }
+      // Otherwise toggle current playback
       ch.playing = !ch.playing;
       ch.updatedAt = Date.now();
+      console.log(`⏯ Toggled playback on channel ${p.channel}: ${ch.playing}`);
       io.to(roomId).emit("playbackState", { 
         channel: p.channel, 
         playing: ch.playing 
@@ -193,7 +261,7 @@ function handleAction(action, p, room, roomId) {
       break;
       
     case "stop":
-      // FIX: Only stop playback, don't delete tracks!
+      // Keep tracks, only stop playback!
       ch.playing = false;
       ch.currentIndex = -1;
       ch.updatedAt = Date.now();
@@ -203,11 +271,7 @@ function handleAction(action, p, room, roomId) {
         title: null, 
         playing: false 
       });
-      // IMPORTANT: Keep the tracks in the playlist!
-      io.to(roomId).emit("playlistUpdate", { 
-        channelA: room.channelA, 
-        channelB: room.channelB 
-      });
+      console.log(`⏹ Stopped channel ${p.channel}, tracks preserved: ${ch.tracks.length}`);
       break;
       
     case "volume":
