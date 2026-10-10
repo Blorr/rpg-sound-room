@@ -10,13 +10,9 @@ app.use(express.static("public"));
 const server = http.createServer(app);
 const io = new Server(server);
 
-// Initialize empty channel
 const blankChannel = () => ({ tracks: [], currentIndex: -1, playing: false, position: 0, updatedAt: Date.now(), volume: 100 });
-
-// Store rooms: { roomId -> { djToken, channelA, channelB, crossfade } }
 const rooms = new Map();
 
-// === CREATE ROOM (called by future DJ) ===
 app.post("/api/rooms", (req, res) => {
   const wanted = (req.body.roomId || "").trim().replace(/[^a-z0-9-]/gi, "").slice(0, 32);
   const id = wanted || "room-" + crypto.randomBytes(3).toString("hex");
@@ -35,7 +31,6 @@ app.post("/api/rooms", (req, res) => {
   res.json({ roomId: id, djToken });
 });
 
-// === PROXY AUDIO FILES (fixes CORS for Tabletop Audio & other sites) ===
 app.get("/proxy/audio", async (req, res) => {
   const url = req.query.url;
   
@@ -60,11 +55,9 @@ app.get("/proxy/audio", async (req, res) => {
   }
 });
 
-// === SOCKET.IO CONNECTIONS ===
 io.on("connection", (socket) => {
   let roomId = null;
 
-  // Join a room
   socket.on("join", (id) => {
     if (!rooms.has(id)) {
       console.log(`❌ Room ${id} not found!`);
@@ -73,27 +66,25 @@ io.on("connection", (socket) => {
     roomId = id;
     socket.join(roomId);
     const room = rooms.get(roomId);
-    socket.emit("state", room); // Send initial state immediately
+    socket.emit("state", room);
     
-    // FIX: Immediately send nowPlaying for any currently playing tracks
+    // FIX: Send nowPlaying for any tracks that ARE ACTUALLY PLAYING
     ["A", "B"].forEach(chId => {
       const ch = chId === "A" ? room.channelA : room.channelB;
       if (ch.currentIndex >= 0 && ch.tracks[ch.currentIndex]) {
         socket.emit("nowPlaying", {
           channel: chId,
           ...ch.tracks[ch.currentIndex],
-          playing: ch.playing,
+          playing: ch.playing,  // IMPORTANT: send actual playing state
           volume: ch.volume
         });
-        console.log(`📬 Sent nowPlaying to new client for channel ${chId}: ${ch.tracks[ch.currentIndex].title}`);
+        console.log(`📬 Sent nowPlaying to new client for channel ${chId}, playing: ${ch.playing}`);
       }
     });
     
-    console.log(`🔗 Client joined room: ${roomId}, total: ${io.sockets.adapter.rooms.get(roomId)?.size}`);
-    console.log(`📊 Room has ${room.channelA.tracks.length + room.channelB.tracks.length} tracks`);
+    console.log(`🔗 Client joined room: ${roomId}`);
   });
 
-  // DJ-authenticated actions
   socket.on("dj", ({ token, action, payload }) => {
     const room = rooms.get(roomId);
     if (!room) return console.log("❌ Room not found for DJ action");
@@ -102,7 +93,6 @@ io.on("connection", (socket) => {
     handleAction(action, payload, room, roomId);
   });
 
-  // Track ended signal from client (for auto-advance)
   socket.on("trackEnded", (channel) => {
     const room = rooms.get(roomId);
     if (!room) return;
@@ -110,26 +100,23 @@ io.on("connection", (socket) => {
     const ch = room[channel];
     const now = Date.now();
     
-    // Guard: don't auto-advance if track just started
     if (now - ch.updatedAt < 3000 || ch.currentIndex < 0) return;
     
-    // Move to next track
     if (ch.currentIndex < ch.tracks.length - 1) {
       ch.currentIndex++;
       ch.playing = true;
       ch.position = 0;
       ch.updatedAt = now;
-      console.log(`🔄 Auto-advance to track ${ch.currentIndex + 1} on channel ${channel}`);
       io.to(roomId).emit("nowPlaying", { 
         channel, 
         ...ch.tracks[ch.currentIndex], 
         playing: true, 
         volume: ch.volume 
       });
+      console.log(`🔄 Auto-advance to track ${ch.currentIndex + 1} on channel ${channel}`);
     }
   });
 
-  // Force sync state (debugging helper)
   socket.on("sync", ({ token }) => {
     const room = rooms.get(roomId);
     if (!room || token !== room.djToken) return;
@@ -148,12 +135,11 @@ io.on("connection", (socket) => {
     console.log(`🔄 Forced state sync to ${io.sockets.adapter.rooms.get(roomId)?.size} clients`);
   });
 
-  // Clean up empty rooms after 10 minutes
   socket.on("disconnect", () => {
     if (!roomId) return;
     const stillHere = io.sockets.adapter.rooms.get(roomId)?.size ?? 0;
     if (stillHere === 0) setTimeout(() => {
-      if ((io.sockets.adapter.rooms.get(roomId)?.size ?? 0) === 0) {
+      if ((io.sockets.adapter_rooms.get(roomId)?.size ?? 0) === 0) {
         rooms.delete(roomId);
         console.log(`🗑️ Deleted empty room: ${roomId}`);
       }
@@ -161,7 +147,6 @@ io.on("connection", (socket) => {
   });
 });
 
-// === HANDLE DJ ACTIONS ===
 function handleAction(action, p, room, roomId) {
   if (!p || !p.channel) {
     console.log("⚠️ Missing payload/channel in DJ action");
@@ -184,17 +169,16 @@ function handleAction(action, p, room, roomId) {
       ch.playing = true;
       ch.position = 0;
       ch.updatedAt = Date.now();
-      console.log(`▶️ Playing track ${p.index} on channel ${p.channel}`);
       io.to(roomId).emit("nowPlaying", { 
         channel: p.channel, 
         ...ch.tracks[p.index], 
         playing: true, 
         volume: ch.volume 
       });
+      console.log(`▶️ Playing track ${p.index} on channel ${p.channel}`);
       break;
       
     case "prev":
-      console.log(`⏮ Prev on channel ${p.channel}, currentIndex: ${ch.currentIndex}`);
       if (ch.currentIndex > 0) {
         ch.currentIndex--;
         ch.playing = true;
@@ -206,13 +190,10 @@ function handleAction(action, p, room, roomId) {
           playing: true, 
           volume: ch.volume 
         });
-      } else {
-        console.log(`  └─ Already at first track (or no track selected)`);
       }
       break;
       
     case "next":
-      console.log(`⏭ Next on channel ${p.channel}, currentIndex: ${ch.currentIndex}`);
       if (ch.currentIndex >= 0 && ch.currentIndex < ch.tracks.length - 1) {
         ch.currentIndex++;
         ch.playing = true;
@@ -224,8 +205,6 @@ function handleAction(action, p, room, roomId) {
           playing: true, 
           volume: ch.volume 
         });
-      } else {
-        console.log(`  └─ Already at last track (tracks: ${ch.tracks.length})`);
       }
       break;
       
@@ -242,21 +221,15 @@ function handleAction(action, p, room, roomId) {
           playing: false 
         });
       }
-      console.log(`🗑️ Removed track ${p.index} on channel ${p.channel}`);
       break;
       
     case "toggle":
-      // If no track is selected, start from the beginning
       if (ch.currentIndex < 0) {
-        if (ch.tracks.length === 0) {
-          console.log(`⚠️ No tracks to play on channel ${p.channel}`);
-          return;
-        }
+        if (ch.tracks.length === 0) return;
         ch.currentIndex = 0;
         ch.playing = true;
         ch.position = 0;
         ch.updatedAt = Date.now();
-        console.log(`▶️ Auto-started first track on channel ${p.channel}`);
         io.to(roomId).emit("nowPlaying", { 
           channel: p.channel, 
           ...ch.tracks[ch.currentIndex], 
@@ -265,10 +238,8 @@ function handleAction(action, p, room, roomId) {
         });
         break;
       }
-      // Otherwise toggle current playback
       ch.playing = !ch.playing;
       ch.updatedAt = Date.now();
-      console.log(`⏯ Toggled playback on channel ${p.channel}: ${ch.playing}`);
       io.to(roomId).emit("playbackState", { 
         channel: p.channel, 
         playing: ch.playing 
@@ -276,9 +247,8 @@ function handleAction(action, p, room, roomId) {
       break;
       
     case "stop":
-      // Keep tracks, only stop playback!
+      // FIX: Set playing=false WITHOUT clearing currentIndex
       ch.playing = false;
-      ch.currentIndex = -1;
       ch.updatedAt = Date.now();
       io.to(roomId).emit("nowPlaying", { 
         channel: p.channel, 
@@ -303,14 +273,12 @@ function handleAction(action, p, room, roomId) {
       break;
   }
   
-  // Broadcast updated playlist to all clients in room
   io.to(roomId).emit("playlistUpdate", { 
     channelA: room.channelA, 
     channelB: room.channelB 
   });
 }
 
-// === START SERVER ===
 server.listen(process.env.PORT || 3000, () => {
   console.log(`🎲 RPG Sound Room running on http://localhost:${process.env.PORT || 3000}`);
 });

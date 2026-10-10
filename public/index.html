@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <title>RPG Sound Room - STATION</title>
 <style>
+  /* SAME CSS AS BEFORE */
   @import url('https://fonts.googleapis.com/css2?family=VT323&display=swap');
   
   :root {
@@ -31,221 +32,45 @@
     min-height: 100vh;
   }
   
-  h1 {
-    font-size: 2.8rem;
-    text-align: center;
-    margin: 0 0 2rem;
-    color: var(--accent-red);
-    text-shadow: 0 0 5px rgba(255, 68, 68, 0.5);
-    letter-spacing: 3px;
-    border-bottom: 3px solid var(--accent-red);
-    padding-bottom: 1rem;
-  }
+  h1 { font-size: 2.8rem; text-align: center; margin: 0 0 2rem; color: var(--accent-red); text-shadow: 0 0 5px rgba(255, 68, 68, 0.5); letter-spacing: 3px; border-bottom: 3px solid var(--accent-red); padding-bottom: 1rem; }
+  h1::after { content: 'AUDIO DISTRIBUTION NODE'; display: block; font-size: 1rem; color: var(--text-dim); letter-spacing: 2px; margin-top: 0.5rem; font-weight: normal; }
   
-  h1::after {
-    content: 'AUDIO DISTRIBUTION NODE';
-    display: block;
-    font-size: 1rem;
-    color: var(--text-dim);
-    letter-spacing: 2px;
-    margin-top: 0.5rem;
-    font-weight: normal;
-  }
-  
-  .card {
-    background: var(--bg-panel);
-    border: 2px solid var(--border);
-    padding: 1.5rem;
-    margin: 1.5rem 0;
-    position: relative;
-  }
-  
-  .card::before {
-    content: '';
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    height: 3px;
-    background: linear-gradient(90deg, transparent, var(--accent-red), transparent);
-  }
-  
-  h2 {
-    color: var(--accent-red);
-    font-size: 1.5rem;
-    margin: 0 0 1rem;
-  }
-  
-  .row {
-    display: flex;
-    gap: 0.5rem;
-    margin: 0.8rem 0;
-    align-items: center;
-    flex-wrap: wrap;
-  }
-  
-  input, button {
-    padding: 0.6rem 1rem;
-    border: 2px solid var(--border-light);
-    font-size: 1rem;
-    font-family: 'VT323', monospace;
-    background: var(--bg-dark);
-    color: var(--text-bright);
-    outline: none;
-  }
-  
+  .card { background: var(--bg-panel); border: 2px solid var(--border); padding: 1.5rem; margin: 1.5rem 0; position: relative; }
+  .card::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px; background: linear-gradient(90deg, transparent, var(--accent-red), transparent); }
+  h2 { color: var(--accent-red); font-size: 1.5rem; margin: 0 0 1rem; }
+  .row { display: flex; gap: 0.5rem; margin: 0.8rem 0; align-items: center; flex-wrap: wrap; }
+  input, button { padding: 0.6rem 1rem; border: 2px solid var(--border-light); font-size: 1rem; font-family: 'VT323', monospace; background: var(--bg-dark); color: var(--text-bright); outline: none; }
   input:focus { border-color: var(--accent-red); }
-  
-  button {
-    background: var(--bg-dark);
-    color: var(--accent-red);
-    cursor: pointer;
-    text-transform: uppercase;
-    transition: all 0.2s;
-  }
-  
-  button:hover {
-    background: var(--accent-red);
-    color: var(--bg-deep);
-  }
-  
+  button { background: var(--bg-dark); color: var(--accent-red); cursor: pointer; text-transform: uppercase; transition: all 0.2s; }
+  button:hover { background: var(--accent-red); color: var(--bg-deep); }
   button.accent { background: var(--accent-red); color: var(--bg-deep); }
-  
   .cols { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; }
   @media(max-width: 700px) { .cols { grid-template-columns: 1fr; } }
-  
-  .channel-card {
-    border: 2px solid var(--border);
-    padding: 1.2rem;
-    background: var(--bg-panel);
-  }
-  
+  .channel-card { border: 2px solid var(--border); padding: 1.2rem; background: var(--bg-panel); }
   .channel-card.chA { border-top: 4px solid var(--accent-orange); }
   .channel-card.chB { border-top: 4px solid var(--accent-red); }
-  
-  .channel-title {
-    font-size: 1.4rem;
-    margin-bottom: 1rem;
-  }
-  
+  .channel-title { font-size: 1.4rem; margin-bottom: 1rem; }
   .channel-chA .channel-title { color: var(--accent-orange); }
   .channel-chB .channel-title { color: var(--accent-red); }
-  
-  ul {
-    list-style: none;
-    padding: 0;
-    margin: 0.5rem 0;
-    border-top: 2px solid var(--border);
-    max-height: 200px;
-    overflow-y: auto;
-    background: var(--bg-dark);
-  }
-  
-  li {
-    padding: 0.5rem;
-    border-bottom: 1px solid var(--border);
-    cursor: pointer;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    font-size: 1rem;
-    color: var(--text-bright);
-  }
-  
+  ul { list-style: none; padding: 0; margin: 0.5rem 0; border-top: 2px solid var(--border); max-height: 200px; overflow-y: auto; background: var(--bg-dark); }
+  li { padding: 0.5rem; border-bottom: 1px solid var(--border); cursor: pointer; display: flex; justify-content: space-between; align-items: center; font-size: 1rem; color: var(--text-bright); }
   li:hover { background: rgba(255, 68, 68, 0.2); }
-  
-  li.active {
-    background: rgba(255, 68, 68, 0.3);
-    border-left: 4px solid var(--accent-red);
-  }
-  
+  li.active { background: rgba(255, 68, 68, 0.3); border-left: 4px solid var(--accent-red); }
   li span.title { flex: 1; overflow: hidden; text-overflow: ellipsis; }
-  
-  li button.remove {
-    background: transparent;
-    border: 2px solid var(--accent-red);
-    color: var(--accent-red);
-    padding: 0.2rem 0.6rem;
-  }
-  
+  li button.remove { background: transparent; border: 2px solid var(--accent-red); color: var(--accent-red); padding: 0.2rem 0.6rem; }
   li button.remove:hover { background: var(--accent-red); color: var(--bg-deep); }
-  
   .muted { color: var(--text-dim); font-size: 1rem; }
   .hidden { display: none; }
-  
-  .share-link {
-    word-break: break-all;
-    background: var(--bg-dark);
-    padding: 1rem;
-    border: 2px solid var(--accent-red);
-    display: block;
-    margin: 1rem 0;
-    color: var(--accent-orange);
-  }
-  
-  .control-group {
-    display: flex;
-    gap: 0.3rem;
-    flex-wrap: wrap;
-    margin: 1rem 0;
-  }
-  
-  .control-btn {
-    width: 48px;
-    height: 48px;
-    font-size: 1.4rem;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-  }
-  
-  .status-bar {
-    background: var(--bg-dark);
-    border: 2px solid var(--border);
-    padding: 0.5rem 1rem;
-    font-size: 1rem;
-    color: var(--accent-orange);
-  }
-  
-  .room-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 1rem;
-    flex-wrap: wrap;
-  }
-  
-  .role-badge {
-    padding: 0.4rem 1rem;
-    border: 2px solid var(--accent-red);
-    color: var(--accent-red);
-    font-size: 0.95rem;
-    background: var(--bg-dark);
-  }
-  
+  .share-link { word-break: break-all; background: var(--bg-dark); padding: 1rem; border: 2px solid var(--accent-red); display: block; margin: 1rem 0; color: var(--accent-orange); }
+  .control-group { display: flex; gap: 0.3rem; flex-wrap: wrap; margin: 1rem 0; }
+  .control-btn { width: 48px; height: 48px; font-size: 1.4rem; display: flex; align-items: center; justify-content: center; }
+  .status-bar { background: var(--bg-dark); border: 2px solid var(--border); padding: 0.5rem 1rem; font-size: 1rem; color: var(--accent-orange); }
+  .room-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; flex-wrap: wrap; }
+  .role-badge { padding: 0.4rem 1rem; border: 2px solid var(--accent-red); color: var(--accent-red); font-size: 0.95rem; background: var(--bg-dark); }
   .now-playing { color: var(--accent-orange); font-size: 1.1rem; }
-  
-  input[type="range"] {
-    -webkit-appearance: none;
-    height: 10px;
-    background: var(--bg-dark);
-    border: 2px solid var(--border-light);
-  }
-  
-  input[type="range"]::-webkit-slider-thumb {
-    -webkit-appearance: none;
-    width: 18px;
-    height: 18px;
-    background: var(--accent-red);
-  }
-  
-  .system-status {
-    text-align: center;
-    color: var(--text-dim);
-    font-size: 0.85rem;
-    margin-top: 2rem;
-  }
-  
+  input[type="range"] { -webkit-appearance: none; height: 10px; background: var(--bg-dark); border: 2px solid var(--border-light); }
+  input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 18px; height: 18px; background: var(--accent-red); }
+  .system-status { text-align: center; color: var(--text-dim); font-size: 0.85rem; margin-top: 2rem; }
   label { color: var(--text-dim); font-size: 1rem; }
 </style>
 </head>
@@ -266,7 +91,7 @@
   <h2>SESSION READY</h2>
   <p style="margin:1rem 0;">Share this link with your crew:</p>
   <span class="share-link" id="shareLink"></span>
-  <button class="accent" onclick="enterRoom(true)">ENTER →</button>
+  <button class="accent" onclick="enterRoom()">ENTER →</button>
 </div>
 
 <div id="room" class="hidden">
@@ -340,11 +165,16 @@ let ytPlayers = { A: null, B: null };
 let audio = { A: document.getElementById("audioA"), B: document.getElementById("audioB") };
 let localMaster = 1, roomVol = { A: 1, B: 1 }, channelType = { A: null, B: null };
 let crossfadeMs = { A: 3000, B: 3000 };
+let audioUnlocked = false;
+let currentTrackSrc = { A: null, B: null }; // Track current source for crossfade detection
 
-// Click anywhere to unlock audio (browsers require this)
+// Unlock audio on first click anywhere
 document.body.addEventListener('click', () => {
+  if (audioUnlocked) return;
+  audioUnlocked = true;
   audio.A.play().then(() => audio.A.pause()).catch(()=>{});
   audio.B.play().then(() => audio.B.pause()).catch(()=>{});
+  console.log("✅ Audio unlocked");
 }, { once: true });
 
 async function createRoom() {
@@ -371,15 +201,30 @@ if (urlRoom) {
   socket.on("playlistUpdate", ({channelA, channelB}) => { paint(channelA, "A"); paint(channelB, "B"); });
   
   socket.on("nowPlaying", ({ channel, type, src, title, playing }) => {
-    if (!src) { stopChannel(channel); return; }
-    channelType[channel] = type;
-    if (type === "file") { playTrackWithCrossfade(channel, src, title); }
-    else { stopChannel(channel); startYT(channel, src); }
+    console.log(`📬 nowPlaying: channel=${channel}, src=${src}, playing=${playing}`);
+    
+    if (src && playing === true) {
+      channelType[channel] = type;
+      document.getElementById("nowTitle" + channel).textContent = title;
+      document.getElementById("play" + channel).textContent = "⏸";
+      
+      if (type === "file") {
+        crossfadeToNewTrack(channel, src, false); // false = no source change detection needed here
+      } else {
+        crossfadeToNewTrack(channel, src, false);
+      }
+    } else if (src === null || playing === false) {
+      stopChannel(channel);
+    }
   });
   
   socket.on("playbackState", ({ channel, playing }) => {
     document.getElementById("play" + channel).textContent = playing ? "⏸" : "▶";
-    if (channelType[channel] === "file") playing ? audio[channel].play().catch(console.warn) : audio[channel].pause();
+    if (channelType[channel] === "file") {
+      playing ? audio[channel].play().catch(console.warn) : audio[channel].pause();
+    } else if (ytPlayers[channel]) {
+      playing ? ytPlayers[channel].playVideo() : ytPlayers[channel].pauseVideo();
+    }
   });
   
   socket.on("volumeChange", ({ channel, volume }) => {
@@ -421,54 +266,123 @@ document.getElementById("crossfadeA").addEventListener("change", e => crossfadeM
 document.getElementById("crossfadeB").addEventListener("change", e => crossfadeMs.B = parseInt(e.target.value) * 1000);
 
 function applyVolumes() {
-  audio.A.volume = roomVol.A * localMaster;
+  const targetVol = roomVol.A * localMaster;
+  audio.A.volume = targetVol;
   audio.B.volume = roomVol.B * localMaster;
+  if (ytPlayers.A?.setVolume) ytPlayers.A.setVolume(targetVol * 100);
+  if (ytPlayers.B?.setVolume) ytPlayers.B.setVolume(roomVol.B * localMaster * 100);
 }
 
 function stopChannel(channel) {
   audio[channel].pause();
+  if (ytPlayers[channel]?.stopVideo) ytPlayers[channel].stopVideo();
   channelType[channel] = null;
   document.getElementById("nowTitle" + channel).textContent = "NONE";
   document.getElementById("play" + channel).textContent = "▶";
+  currentTrackSrc[channel] = null;
 }
 
-function playTrackWithCrossfade(channel, src, title) {
-  const oldSrc = audio[channel].src;
+// SIMPLIFIED CROSSFADE: Volume-only, works with YouTube
+function crossfadeToNewTrack(channel, newSrc, isNewTrack = true) {
   const cfTime = crossfadeMs[channel];
+  const targetVol = roomVol[channel] * localMaster;
   
-  document.getElementById("nowTitle" + channel).textContent = title;
-  document.getElementById("play" + channel).textContent = "⏸";
-  
-  if (oldSrc && oldSrc !== src && cfTime > 0) {
-    // Crossfade: fade out old, fade in new
-    let progress = 0;
-    const step = 50;
-    const interval = setInterval(() => {
-      progress += step;
-      audio[channel].volume = (1 - progress/cfTime) * (roomVol[channel] * localMaster);
-      
-      if (progress >= cfTime) {
-        clearInterval(interval);
-        audio[channel].pause();
-        audio[channel].src = src;
-        audio[channel].volume = 0;
-        audio[channel].play().catch(()=>{});
-        
-        // Fade in
-        let fadeIn = 0;
-        const fadeInInt = setInterval(() => {
-          fadeIn += step;
-          audio[channel].volume = Math.min(1, fadeIn/cfTime) * (roomVol[channel] * localMaster);
-          if (fadeIn >= cfTime) clearInterval(fadeInInt);
-        }, step);
-      }
-    }, step);
-  } else {
-    // No crossfade, play directly
-    audio[channel].src = src;
-    audio[channel].volume = roomVol[channel] * localMaster;
-    audio[channel].play().catch(console.warn);
+  // If crossfade is 0 or this is initial load, just play directly
+  if (cfTime <= 0 || !currentTrackSrc[channel] || !isNewTrack) {
+    playDirect(channel, newSrc);
+    currentTrackSrc[channel] = newSrc;
+    return;
   }
+  
+  // Check if source actually changed
+  if (newSrc === currentTrackSrc[channel]) {
+    // Same track continuing, no crossfade needed
+    return;
+  }
+  
+  console.log(`🎚️ Crossfading on ${channel}: ${cfTime}ms`);
+  
+  // STEP 1: Fade out old track (half the crossfade time)
+  const fadeOutDuration = cfTime / 2;
+  const steps = 20; // Smoother ramp
+  const stepDelay = fadeOutDuration / steps;
+  let step = 0;
+  
+  const fadeOut = setInterval(() => {
+    step++;
+    const progress = step / steps;
+    const vol = (1 - progress) * targetVol;
+    
+    if (channelType[channel] === "file") {
+      audio[channel].volume = Math.max(0, vol);
+    } else if (ytPlayers[channel]) {
+      ytPlayers[channel].setVolume(Math.max(0, vol * 100));
+    }
+    
+    if (step >= steps) {
+      clearInterval(fadeOut);
+      
+      // STEP 2: Small gap between tracks
+      setTimeout(() => {
+        // Swap the source
+        if (channelType[channel] === "file") {
+          audio[channel].src = newSrc;
+          audio[channel].currentTime = 0;
+        } else {
+          ytPlayers[channel].loadVideoById(newSrc);
+        }
+        
+        // STEP 3: Fade in new track (half the crossfade time)
+        let fadeStep = 0;
+        const fadeIn = setInterval(() => {
+          fadeStep++;
+          const progress = fadeStep / steps;
+          const vol = progress * targetVol;
+          
+          if (channelType[channel] === "file") {
+            audio[channel].volume = Math.min(targetVol, vol);
+          } else if (ytPlayers[channel]) {
+            ytPlayers[channel].setVolume(Math.min(targetVol * 100, vol * 100));
+          }
+          
+          if (fadeStep >= steps) {
+            clearInterval(fadeIn);
+            console.log(`✅ Crossfade complete on ${channel}`);
+          }
+        }, stepDelay);
+        
+        // Ensure audio is playing
+        if (channelType[channel] === "file") {
+          audio[channel].play().catch(console.warn);
+        } else {
+          ytPlayers[channel].playVideo();
+        }
+        
+        currentTrackSrc[channel] = newSrc;
+      }, 100); // 100ms gap
+    }
+  }, stepDelay);
+}
+
+// Play directly without crossfade
+function playDirect(channel, src) {
+  const targetVol = roomVol[channel] * localMaster;
+  
+  if (channelType[channel] === "file") {
+    audio[channel].src = src;
+    audio[channel].volume = targetVol;
+    audio[channel].play().catch(console.warn);
+  } else {
+    if (ytPlayers[channel]) {
+      ytPlayers[channel].loadVideoById(src);
+      ytPlayers[channel].setVolume(targetVol * 100);
+      ytPlayers[channel].playVideo();
+    } else {
+      startYT(channel, src);
+    }
+  }
+  
+  currentTrackSrc[channel] = src;
 }
 
 function paint(ch, id) {
@@ -507,7 +421,10 @@ function startYT(channel, videoId) {
     ytPlayers[channel] = new YT.Player("yt" + channel, {
       videoId,
       playerVars: { autoplay: 1, controls: 0 },
-      events: { onReady: e => { e.target.playVideo(); } }
+      events: { 
+        onReady: e => { e.target.playVideo(); applyVolumes(); },
+        onStateChange: e => { if (e.data === 0) socket.emit("trackEnded", channel); }
+      }
     });
   } else { ytPlayers[channel].loadVideoById(videoId); }
 }
