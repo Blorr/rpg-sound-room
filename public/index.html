@@ -58,7 +58,7 @@
   li button.remove { background: transparent; border: 2px solid var(--accent-red); color: var(--accent-red); padding: 0.2rem 0.6rem; }
   li button.remove:hover { background: var(--accent-red); color: var(--bg-deep); }
   .muted { color: var(--text-dim); font-size: 1rem; }
-  .hidden { display: none; }
+  .hidden { display: none !important; }
   .share-link { word-break: break-all; background: var(--bg-dark); padding: 1rem; border: 2px solid var(--accent-red); display: block; margin: 1rem 0; color: var(--accent-orange); }
   .control-group { display: flex; gap: 0.3rem; flex-wrap: wrap; margin: 1rem 0; }
   .control-btn { width: 48px; height: 48px; font-size: 1.4rem; display: flex; align-items: center; justify-content: center; }
@@ -118,7 +118,7 @@
 <div id="audioUnlock">
   <h2>🔊 ENABLE AUDIO</h2>
   <p>Click below to enable sound playback for your session</p>
-  <button class="accent" onclick="unlockAudio()">ENABLE AUDIO SYSTEM</button>
+  <button class="accent" id="enableAudioBtn">ENABLE AUDIO SYSTEM</button>
 </div>
 
 <h1>🎲 RPG SOUND ROOM</h1>
@@ -213,32 +213,53 @@ let localMaster = 1, roomVol = { A: 1, B: 1 }, channelType = { A: null, B: null 
 let crossfadeMs = { A: 3000, B: 3000 };
 let audioUnlocked = false;
 let currentTrackSrc = { A: null, B: null };
-let isCrossfading = { A: false, B: false }; // Prevent overlapping crossfades
+let isCrossfading = { A: false, B: false };
+let waitingForUnlock = []; // Queue of tracks to play after unlock
 
-// VISIBLE AUDIO UNLOCK BUTTON
+// GUARANTEED OVERLAY HIDE
 function unlockAudio() {
+  console.log("🔓 unlockAudio() called");
+  
+  // IMMEDIATELY hide overlay (force it)
+  const overlay = document.getElementById("audioUnlock");
+  if (overlay) {
+    overlay.style.display = "none";
+    overlay.classList.add("hidden");
+  }
+  
   if (audioUnlocked) return;
   audioUnlocked = true;
-  document.getElementById("audioUnlock").classList.add("hidden");
-  console.log("✅ Audio unlocked by user click");
+  console.log("✅ Audio unlocked!");
   
-  // Unmute and play any waiting YouTube videos
-  ['A','B'].forEach(ch => {
-    if (ytPlayers[ch] && currentTrackSrc[ch]) {
-      ytPlayers[ch].unMute();
-      ytPlayers[ch].setVolume(roomVol[ch] * localMaster * 100);
-      if (ytPlayers[ch].getPlayerState?.() !== 1) {
-        ytPlayers[ch].playVideo();
+  // Play any queued tracks
+  console.log(`📋 Processing ${waitingForUnlock.length} queued tracks`);
+  waitingForUnlock.forEach(item => {
+    console.log(`▶️ Playing queued ${item.type} on channel ${item.channel}`);
+    if (item.type === "file") {
+      audio[item.channel].play().catch(console.warn);
+    } else {
+      if (ytPlayers[item.channel]) {
+        ytPlayers[item.channel].unMute();
+        ytPlayers[item.channel].setVolume(roomVol[item.channel] * localMaster * 100);
+        ytPlayers[item.channel].playVideo();
       }
-      console.log(`▶️ Started YouTube on ${ch} (after unlock)`);
-    }
-    
-    if (channelType[ch] === "file" && currentTrackSrc[ch] && audio[ch].src) {
-      audio[ch].play().catch(err => console.error(`❌ Audio ${ch} play failed:`, err));
-      console.log(`▶️ Started audio file on ${ch} (after unlock)`);
     }
   });
+  waitingForUnlock = [];
 }
+
+// Attach event listener directly to button
+window.addEventListener("DOMContentLoaded", () => {
+  const btn = document.getElementById("enableAudioBtn");
+  if (btn) {
+    btn.addEventListener("click", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      console.log("🖱️ Button clicked!");
+      unlockAudio();
+    });
+  }
+});
 
 async function createRoom() {
   const name = document.getElementById("newRoomName").value.trim();
@@ -349,7 +370,6 @@ function stopChannel(channel) {
   currentTrackSrc[channel] = null;
 }
 
-// AUDIO FILE HANDLING WITH CROSSFADE
 function handleAudioFile(channel, newSrc) {
   const cfTime = crossfadeMs[channel];
   const targetVol = roomVol[channel] * localMaster;
@@ -359,17 +379,19 @@ function handleAudioFile(channel, newSrc) {
   if (wasPlaying && srcChanged && cfTime > 0 && !isCrossfading[channel]) {
     performCrossfade(channel, newSrc, targetVol, cfTime);
   } else {
-    // Play directly
     audio[channel].src = newSrc;
     audio[channel].volume = targetVol;
     if (audioUnlocked) {
       audio[channel].play().catch(err => console.error(`❌ Audio ${channel} play failed:`, err));
+    } else {
+      // Queue for later
+      console.log(`⏳ Queued audio file on ${channel} for unlock`);
+      waitingForUnlock.push({ channel, type: "file" });
     }
     currentTrackSrc[channel] = newSrc;
   }
 }
 
-// CROSSFADE FOR AUDIO FILES
 function performCrossfade(channel, newSrc, targetVol, cfTime) {
   if (isCrossfading[channel]) return;
   isCrossfading[channel] = true;
@@ -416,7 +438,6 @@ function performCrossfade(channel, newSrc, targetVol, cfTime) {
   }, stepDelay);
 }
 
-// YOUTUBE HANDLING WITH CROSSFADE
 function handleYouTube(channel, newSrc) {
   if (!window.YT || !YT.Player) {
     const tag = document.createElement("script");
@@ -431,13 +452,11 @@ function handleYouTube(channel, newSrc) {
   const srcChanged = currentTrackSrc[channel] !== newSrc;
   const cfTime = crossfadeMs[channel];
   
-  // Check if we need crossfade for YouTube
   if (wasPlaying && srcChanged && cfTime > 0 && !isCrossfading[channel] && ytPlayers[channel]) {
     performYouTubeCrossfade(channel, newSrc, targetVol, cfTime);
     return;
   }
   
-  // Direct play/no crossfade needed
   const onCreate = (player) => {
     player.mute();
     currentTrackSrc[channel] = newSrc;
@@ -447,9 +466,10 @@ function handleYouTube(channel, newSrc) {
       player.unMute();
       player.setVolume(targetVol * 100);
       player.playVideo();
-      console.log(`▶️ YouTube started on ${channel} (direct)`);
+      console.log(`▶️ YouTube started on ${channel}`);
     } else {
       console.log(`⏳ YouTube muted on ${channel}, waiting for unlock...`);
+      waitingForUnlock.push({ channel, type: "youtube" });
     }
   };
   
@@ -463,7 +483,6 @@ function handleYouTube(channel, newSrc) {
       }
     });
   } else {
-    // Player exists
     currentTrackSrc[channel] = newSrc;
     ytPlayers[channel].loadVideoById(newSrc);
     ytPlayers[channel].mute();
@@ -472,14 +491,14 @@ function handleYouTube(channel, newSrc) {
       ytPlayers[channel].unMute();
       ytPlayers[channel].setVolume(targetVol * 100);
       ytPlayers[channel].playVideo();
-      console.log(`▶️ YouTube restarted on ${channel} (direct)`);
+      console.log(`▶️ YouTube restarted on ${channel}`);
     } else {
       console.log(`⏳ YouTube on ${channel} muted, waiting for unlock...`);
+      waitingForUnlock.push({ channel, type: "youtube" });
     }
   }
 }
 
-// YOUTUBE CROSSFADE FUNCTION
 function performYouTubeCrossfade(channel, newSrc, targetVol, cfTime) {
   if (isCrossfading[channel]) return;
   isCrossfading[channel] = true;
@@ -492,7 +511,6 @@ function performYouTubeCrossfade(channel, newSrc, targetVol, cfTime) {
   
   console.log(`🎚️ Starting YouTube crossfade on ${channel}, duration: ${cfTime}ms`);
   
-  // Fade out
   const fadeOut = setInterval(() => {
     step++;
     const progress = step / fadeSteps;
@@ -502,12 +520,10 @@ function performYouTubeCrossfade(channel, newSrc, targetVol, cfTime) {
     if (step >= fadeSteps) {
       clearInterval(fadeOut);
       
-      // Gap and swap
       setTimeout(() => {
         player.loadVideoById(newSrc);
-        player.mute();  // Reset to muted before fade in
+        player.mute();
         
-        // Fade in
         let fadeStep = 0;
         const fadeIn = setInterval(() => {
           fadeStep++;
