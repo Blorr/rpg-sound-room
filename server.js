@@ -74,6 +74,21 @@ io.on("connection", (socket) => {
     socket.join(roomId);
     const room = rooms.get(roomId);
     socket.emit("state", room); // Send initial state immediately
+    
+    // FIX: Immediately send nowPlaying for any currently playing tracks
+    ["A", "B"].forEach(chId => {
+      const ch = chId === "A" ? room.channelA : room.channelB;
+      if (ch.currentIndex >= 0 && ch.tracks[ch.currentIndex]) {
+        socket.emit("nowPlaying", {
+          channel: chId,
+          ...ch.tracks[ch.currentIndex],
+          playing: ch.playing,
+          volume: ch.volume
+        });
+        console.log(`📬 Sent nowPlaying to new client for channel ${chId}: ${ch.tracks[ch.currentIndex].title}`);
+      }
+    });
+    
     console.log(`🔗 Client joined room: ${roomId}, total: ${io.sockets.adapter.rooms.get(roomId)?.size}`);
     console.log(`📊 Room has ${room.channelA.tracks.length + room.channelB.tracks.length} tracks`);
   });
