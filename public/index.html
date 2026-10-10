@@ -4,7 +4,6 @@
 <meta charset="utf-8">
 <title>RPG Sound Room - STATION</title>
 <style>
-  /* SAME CSS AS BEFORE */
   @import url('https://fonts.googleapis.com/css2?family=VT323&display=swap');
   
   :root {
@@ -34,7 +33,6 @@
   
   h1 { font-size: 2.8rem; text-align: center; margin: 0 0 2rem; color: var(--accent-red); text-shadow: 0 0 5px rgba(255, 68, 68, 0.5); letter-spacing: 3px; border-bottom: 3px solid var(--accent-red); padding-bottom: 1rem; }
   h1::after { content: 'AUDIO DISTRIBUTION NODE'; display: block; font-size: 1rem; color: var(--text-dim); letter-spacing: 2px; margin-top: 0.5rem; font-weight: normal; }
-  
   .card { background: var(--bg-panel); border: 2px solid var(--border); padding: 1.5rem; margin: 1.5rem 0; position: relative; }
   .card::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px; background: linear-gradient(90deg, transparent, var(--accent-red), transparent); }
   h2 { color: var(--accent-red); font-size: 1.5rem; margin: 0 0 1rem; }
@@ -166,7 +164,7 @@ let audio = { A: document.getElementById("audioA"), B: document.getElementById("
 let localMaster = 1, roomVol = { A: 1, B: 1 }, channelType = { A: null, B: null };
 let crossfadeMs = { A: 3000, B: 3000 };
 let audioUnlocked = false;
-let currentTrackSrc = { A: null, B: null }; // Track current source for crossfade detection
+let currentTrackSrc = { A: null, B: null };
 
 // Unlock audio on first click anywhere
 document.body.addEventListener('click', () => {
@@ -208,10 +206,11 @@ if (urlRoom) {
       document.getElementById("nowTitle" + channel).textContent = title;
       document.getElementById("play" + channel).textContent = "⏸";
       
+      // FIXED: Always play when we get nowPlaying with playing=true
       if (type === "file") {
-        crossfadeToNewTrack(channel, src, false); // false = no source change detection needed here
+        handleAudioFile(channel, src);
       } else {
-        crossfadeToNewTrack(channel, src, false);
+        handleYouTube(channel, src);
       }
     } else if (src === null || playing === false) {
       stopChannel(channel);
@@ -282,107 +281,144 @@ function stopChannel(channel) {
   currentTrackSrc[channel] = null;
 }
 
-// SIMPLIFIED CROSSFADE: Volume-only, works with YouTube
-function crossfadeToNewTrack(channel, newSrc, isNewTrack = true) {
+// Handle audio file playback with crossfade
+function handleAudioFile(channel, newSrc) {
   const cfTime = crossfadeMs[channel];
   const targetVol = roomVol[channel] * localMaster;
+  const wasPlaying = !!currentTrackSrc[channel];
+  const srcChanged = currentTrackSrc[channel] !== newSrc;
   
-  // If crossfade is 0 or this is initial load, just play directly
-  if (cfTime <= 0 || !currentTrackSrc[channel] || !isNewTrack) {
-    playDirect(channel, newSrc);
+  if (wasPlaying && srcChanged && cfTime > 0) {
+    // Perform crossfade
+    performCrossfade(channel, newSrc, targetVol, cfTime);
+  } else {
+    // Play directly (first load or crossfade disabled)
+    audio[channel].src = newSrc;
+    audio[channel].volume = targetVol;
+    audio[channel].play().catch(err => console.error("❌ Play failed:", err));
     currentTrackSrc[channel] = newSrc;
+    console.log(`▶️ Played file on ${channel}: ${newSrc.substring(0, 30)}...`);
+  }
+}
+
+// Handle YouTube playback with crossfade
+function handleYouTube(channel, newSrc) {
+  const cfTime = crossfadeMs[channel];
+  const targetVol = roomVol[channel] * localMaster;
+  const wasPlaying = !!currentTrackSrc[channel];
+  const srcChanged = currentTrackSrc[channel] !== newSrc;
+  
+  if (!window.YT || !YT.Player) {
+    const tag = document.createElement("script");
+    tag.src = "https://www.youtube.com/iframe_api";
+    document.head.appendChild(tag);
+    window.onYouTubeIframeAPIReady = () => handleYouTube(channel, newSrc);
     return;
   }
   
-  // Check if source actually changed
-  if (newSrc === currentTrackSrc[channel]) {
-    // Same track continuing, no crossfade needed
-    return;
+  if (wasPlaying && srcChanged && cfTime > 0 && ytPlayers[channel]) {
+    // Perform crossfade for YouTube
+    performYouTubeCrossfade(channel, newSrc, targetVol, cfTime);
+  } else {
+    // Play directly
+    if (!ytPlayers[channel]) {
+      startYT(channel, newSrc);
+    } else {
+      ytPlayers[channel].loadVideoById(newSrc);
+      ytPlayers[channel].playVideo();
+      ytPlayers[channel].setVolume(targetVol * 100);
+    }
+    currentTrackSrc[channel] = newSrc;
+    console.log(`▶️ Played YouTube on ${channel}: ${newSrc}`);
   }
-  
-  console.log(`🎚️ Crossfading on ${channel}: ${cfTime}ms`);
-  
-  // STEP 1: Fade out old track (half the crossfade time)
-  const fadeOutDuration = cfTime / 2;
-  const steps = 20; // Smoother ramp
-  const stepDelay = fadeOutDuration / steps;
+}
+
+// Generic crossfade for audio files
+function performCrossfade(channel, newSrc, targetVol, cfTime) {
+  const fadeSteps = 20;
+  const fadeDuration = cfTime / 2;
+  const stepDelay = fadeDuration / fadeSteps;
   let step = 0;
   
+  console.log(`🎚️ Starting crossfade on ${channel}`);
+  
+  // Fade out
   const fadeOut = setInterval(() => {
     step++;
-    const progress = step / steps;
+    const progress = step / fadeSteps;
     const vol = (1 - progress) * targetVol;
+    audio[channel].volume = Math.max(0, vol);
     
-    if (channelType[channel] === "file") {
-      audio[channel].volume = Math.max(0, vol);
-    } else if (ytPlayers[channel]) {
-      ytPlayers[channel].setVolume(Math.max(0, vol * 100));
-    }
-    
-    if (step >= steps) {
+    if (step >= fadeSteps) {
       clearInterval(fadeOut);
       
-      // STEP 2: Small gap between tracks
+      // Gap and swap
       setTimeout(() => {
-        // Swap the source
-        if (channelType[channel] === "file") {
-          audio[channel].src = newSrc;
-          audio[channel].currentTime = 0;
-        } else {
-          ytPlayers[channel].loadVideoById(newSrc);
-        }
+        audio[channel].src = newSrc;
+        audio[channel].currentTime = 0;
+        audio[channel].play().catch(console.warn);
         
-        // STEP 3: Fade in new track (half the crossfade time)
+        // Fade in
         let fadeStep = 0;
         const fadeIn = setInterval(() => {
           fadeStep++;
-          const progress = fadeStep / steps;
+          const progress = fadeStep / fadeSteps;
           const vol = progress * targetVol;
+          audio[channel].volume = Math.min(targetVol, vol);
           
-          if (channelType[channel] === "file") {
-            audio[channel].volume = Math.min(targetVol, vol);
-          } else if (ytPlayers[channel]) {
-            ytPlayers[channel].setVolume(Math.min(targetVol * 100, vol * 100));
-          }
-          
-          if (fadeStep >= steps) {
+          if (fadeStep >= fadeSteps) {
             clearInterval(fadeIn);
+            currentTrackSrc[channel] = newSrc;
             console.log(`✅ Crossfade complete on ${channel}`);
           }
         }, stepDelay);
-        
-        // Ensure audio is playing
-        if (channelType[channel] === "file") {
-          audio[channel].play().catch(console.warn);
-        } else {
-          ytPlayers[channel].playVideo();
-        }
-        
-        currentTrackSrc[channel] = newSrc;
-      }, 100); // 100ms gap
+      }, 100);
     }
   }, stepDelay);
 }
 
-// Play directly without crossfade
-function playDirect(channel, src) {
-  const targetVol = roomVol[channel] * localMaster;
+// Crossfade for YouTube
+function performYouTubeCrossfade(channel, newSrc, targetVol, cfTime) {
+  const fadeSteps = 20;
+  const fadeDuration = cfTime / 2;
+  const stepDelay = fadeDuration / fadeSteps;
+  let step = 0;
+  const player = ytPlayers[channel];
   
-  if (channelType[channel] === "file") {
-    audio[channel].src = src;
-    audio[channel].volume = targetVol;
-    audio[channel].play().catch(console.warn);
-  } else {
-    if (ytPlayers[channel]) {
-      ytPlayers[channel].loadVideoById(src);
-      ytPlayers[channel].setVolume(targetVol * 100);
-      ytPlayers[channel].playVideo();
-    } else {
-      startYT(channel, src);
+  console.log(`🎚️ Starting YouTube crossfade on ${channel}`);
+  
+  // Fade out
+  const fadeOut = setInterval(() => {
+    step++;
+    const progress = step / fadeSteps;
+    const vol = Math.max(0, (1 - progress) * targetVol * 100);
+    player.setVolume(vol);
+    
+    if (step >= fadeSteps) {
+      clearInterval(fadeOut);
+      
+      // Gap and swap
+      setTimeout(() => {
+        player.loadVideoById(newSrc);
+        player.playVideo();
+        
+        // Fade in
+        let fadeStep = 0;
+        const fadeIn = setInterval(() => {
+          fadeStep++;
+          const progress = fadeStep / fadeSteps;
+          const vol = Math.min(targetVol * 100, progress * targetVol * 100);
+          player.setVolume(vol);
+          
+          if (fadeStep >= fadeSteps) {
+            clearInterval(fadeIn);
+            currentTrackSrc[channel] = newSrc;
+            console.log(`✅ YouTube crossfade complete on ${channel}`);
+          }
+        }, stepDelay);
+      }, 100);
     }
-  }
-  
-  currentTrackSrc[channel] = src;
+  }, stepDelay);
 }
 
 function paint(ch, id) {
