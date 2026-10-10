@@ -4,8 +4,6 @@
 <meta charset="utf-8">
 <title>RPG Sound Room - STATION</title>
 <style>
-  /* ... SAME CSS AS BEFORE ... */
-  
   @import url('https://fonts.googleapis.com/css2?family=VT323&display=swap');
   
   :root {
@@ -13,7 +11,6 @@
     --bg-dark: #2a2a32;
     --bg-panel: #32323a;
     --accent-red: #ff4444;
-    --accent-red-bright: #ff6666;
     --accent-orange: #ffaa55;
     --text-main: #ffffff;
     --text-bright: #ffd0d0;
@@ -22,53 +19,260 @@
     --border-light: #777780;
   }
   
-  /* ... ALL OTHER CSS REMAINS THE SAME ... */
+  * { box-sizing: border-box; }
   
-  /* Audio unlock overlay */
-  #audioUnlock {
-    position: fixed;
+  body {
+    font-family: 'VT323', monospace;
+    background: var(--bg-deep);
+    color: var(--text-main);
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 2rem;
+    min-height: 100vh;
+  }
+  
+  h1 {
+    font-size: 2.8rem;
+    text-align: center;
+    margin: 0 0 2rem;
+    color: var(--accent-red);
+    text-shadow: 0 0 5px rgba(255, 68, 68, 0.5);
+    letter-spacing: 3px;
+    border-bottom: 3px solid var(--accent-red);
+    padding-bottom: 1rem;
+  }
+  
+  h1::after {
+    content: 'AUDIO DISTRIBUTION NODE';
+    display: block;
+    font-size: 1rem;
+    color: var(--text-dim);
+    letter-spacing: 2px;
+    margin-top: 0.5rem;
+    font-weight: normal;
+  }
+  
+  .card {
+    background: var(--bg-panel);
+    border: 2px solid var(--border);
+    padding: 1.5rem;
+    margin: 1.5rem 0;
+    position: relative;
+  }
+  
+  .card::before {
+    content: '';
+    position: absolute;
     top: 0;
     left: 0;
     right: 0;
-    bottom: 0;
-    background: rgba(0,0,0,0.95);
-    display: flex;
-    flex-direction: column;
-    justify-content: center;
-    align-items: center;
-    z-index: 1000;
+    height: 3px;
+    background: linear-gradient(90deg, transparent, var(--accent-red), transparent);
   }
   
-  #audioUnlock h2 {
+  h2 {
     color: var(--accent-red);
-    font-size: 2rem;
+    font-size: 1.5rem;
+    margin: 0 0 1rem;
+  }
+  
+  .row {
+    display: flex;
+    gap: 0.5rem;
+    margin: 0.8rem 0;
+    align-items: center;
+    flex-wrap: wrap;
+  }
+  
+  input, button {
+    padding: 0.6rem 1rem;
+    border: 2px solid var(--border-light);
+    font-size: 1rem;
+    font-family: 'VT323', monospace;
+    background: var(--bg-dark);
+    color: var(--text-bright);
+    outline: none;
+  }
+  
+  input:focus { border-color: var(--accent-red); }
+  
+  button {
+    background: var(--bg-dark);
+    color: var(--accent-red);
+    cursor: pointer;
+    text-transform: uppercase;
+    transition: all 0.2s;
+  }
+  
+  button:hover {
+    background: var(--accent-red);
+    color: var(--bg-deep);
+  }
+  
+  button.accent { background: var(--accent-red); color: var(--bg-deep); }
+  
+  .cols { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; }
+  @media(max-width: 700px) { .cols { grid-template-columns: 1fr; } }
+  
+  .channel-card {
+    border: 2px solid var(--border);
+    padding: 1.2rem;
+    background: var(--bg-panel);
+  }
+  
+  .channel-card.chA { border-top: 4px solid var(--accent-orange); }
+  .channel-card.chB { border-top: 4px solid var(--accent-red); }
+  
+  .channel-title {
+    font-size: 1.4rem;
     margin-bottom: 1rem;
   }
   
-  #audioUnlock button {
-    font-size: 1.5rem;
-    padding: 1rem 2rem;
-    margin-top: 1rem;
+  .channel-chA .channel-title { color: var(--accent-orange); }
+  .channel-chB .channel-title { color: var(--accent-red); }
+  
+  ul {
+    list-style: none;
+    padding: 0;
+    margin: 0.5rem 0;
+    border-top: 2px solid var(--border);
+    max-height: 200px;
+    overflow-y: auto;
+    background: var(--bg-dark);
   }
+  
+  li {
+    padding: 0.5rem;
+    border-bottom: 1px solid var(--border);
+    cursor: pointer;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 1rem;
+    color: var(--text-bright);
+  }
+  
+  li:hover { background: rgba(255, 68, 68, 0.2); }
+  
+  li.active {
+    background: rgba(255, 68, 68, 0.3);
+    border-left: 4px solid var(--accent-red);
+  }
+  
+  li span.title { flex: 1; overflow: hidden; text-overflow: ellipsis; }
+  
+  li button.remove {
+    background: transparent;
+    border: 2px solid var(--accent-red);
+    color: var(--accent-red);
+    padding: 0.2rem 0.6rem;
+  }
+  
+  li button.remove:hover { background: var(--accent-red); color: var(--bg-deep); }
+  
+  .muted { color: var(--text-dim); font-size: 1rem; }
+  .hidden { display: none; }
+  
+  .share-link {
+    word-break: break-all;
+    background: var(--bg-dark);
+    padding: 1rem;
+    border: 2px solid var(--accent-red);
+    display: block;
+    margin: 1rem 0;
+    color: var(--accent-orange);
+  }
+  
+  .control-group {
+    display: flex;
+    gap: 0.3rem;
+    flex-wrap: wrap;
+    margin: 1rem 0;
+  }
+  
+  .control-btn {
+    width: 48px;
+    height: 48px;
+    font-size: 1.4rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  
+  .status-bar {
+    background: var(--bg-dark);
+    border: 2px solid var(--border);
+    padding: 0.5rem 1rem;
+    font-size: 1rem;
+    color: var(--accent-orange);
+  }
+  
+  .room-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1rem;
+    flex-wrap: wrap;
+  }
+  
+  .role-badge {
+    padding: 0.4rem 1rem;
+    border: 2px solid var(--accent-red);
+    color: var(--accent-red);
+    font-size: 0.95rem;
+    background: var(--bg-dark);
+  }
+  
+  .now-playing { color: var(--accent-orange); font-size: 1.1rem; }
+  
+  input[type="range"] {
+    -webkit-appearance: none;
+    height: 10px;
+    background: var(--bg-dark);
+    border: 2px solid var(--border-light);
+  }
+  
+  input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 18px;
+    height: 18px;
+    background: var(--accent-red);
+  }
+  
+  .system-status {
+    text-align: center;
+    color: var(--text-dim);
+    font-size: 0.85rem;
+    margin-top: 2rem;
+  }
+  
+  label { color: var(--text-dim); font-size: 1rem; }
 </style>
 </head>
 <body>
-
-<!-- Audio unlock overlay -->
-<div id="audioUnlock">
-  <h2>🔊 AUDIO SYSTEM INITIALIZATION</h2>
-  <p class="muted">Browsers require interaction to enable audio playback.</p>
-  <button class="accent" onclick="unlockAudio()">ENABLE AUDIO SYSTEM</button>
-</div>
-
 <h1>🎲 RPG SOUND ROOM</h1>
 
-<!-- ... SAME HTML BODY AS BEFORE (landing, djSetup, room) ... -->
+<div id="landing" class="card">
+  <h2>INITIALIZE SESSION</h2>
+  <p class="muted">Creating a room makes you the DJ.</p>
+  <div class="row">
+    <input id="newRoomName" placeholder="Room name (optional)">
+    <button class="accent" onclick="createRoom()">INITIALIZE</button>
+  </div>
+  <p class="muted">Or use a room link from your operator.</p>
+</div>
+
+<div id="djSetup" class="card hidden">
+  <h2>SESSION READY</h2>
+  <p style="margin:1rem 0;">Share this link with your crew:</p>
+  <span class="share-link" id="shareLink"></span>
+  <button class="accent" onclick="enterRoom(true)">ENTER →</button>
+</div>
 
 <div id="room" class="hidden">
   <div class="card">
     <div class="room-header">
-      <h2 style="margin:0">CHANNEL: <span id="roomLabel"></span></h2>
+      <h2 style="margin:0">ROOM: <span id="roomLabel"></span></h2>
       <span class="role-badge" id="roleLabel"></span>
     </div>
     <div class="row">
@@ -76,12 +280,10 @@
       <input type="range" min="0" max="100" value="100" id="masterVol" style="max-width:200px">
       <span id="masterVal">100%</span>
     </div>
-    <div class="status-bar" id="connectionStatus">STATUS: ONLINE</div>
+    <div class="status-bar">STATUS: ONLINE</div>
   </div>
 
-  <!-- DJ Controls (Hidden for listeners) -->
   <div id="djControls" class="cols djOnly">
-    <!-- Channel A -->
     <div class="card channel-card chA">
       <h3 class="channel-title">🌊 CHANNEL A [AMBIENCE]</h3>
       <div class="status-bar">ACTIVE: <span id="nowTitleA" class="now-playing">NONE</span></div>
@@ -90,18 +292,17 @@
         <input type="number" min="0" max="10" value="3" id="crossfadeA" style="width:60px">s
       </div>
       <div class="row"><label>GAIN:</label><input type="range" min="0" max="100" value="100" id="volA"><span id="volValA">100%</span></div>
-      <div class="djOnly control-group">
-        <button class="control-btn" onclick="dj('prev',{channel:'A'})" title="PREVIOUS">⏮</button>
+      <div class="control-group">
+        <button class="control-btn" onclick="dj('prev',{channel:'A'})">⏮</button>
         <button class="control-btn" onclick="dj('toggle',{channel:'A'})" id="playA">▶</button>
-        <button class="control-btn" onclick="dj('next',{channel:'A'})" title="NEXT">⏭</button>
-        <button class="control-btn" onclick="dj('stop',{channel:'A'})" style="background:var(--accent-red);color:var(--bg-deep)" title="HALT">⏹</button>
+        <button class="control-btn" onclick="dj('next',{channel:'A'})">⏭</button>
+        <button class="control-btn" onclick="dj('stop',{channel:'A'})" style="background:var(--accent-red);color:var(--bg-deep)">⏹</button>
       </div>
-      <div class="djOnly row"><input id="urlA" placeholder="STREAM SOURCE URL"><input id="titleA" placeholder="IDENTIFIER" style="flex:0.6"><button class="accent" onclick="queue('A')">LOAD</button></div>
-      <div style="font-size:0.9rem;margin:0.5rem 0;color:var(--text-dim)">PLAYLIST [<span id="countA">0</span>]</div>
+      <div class="row"><input id="urlA" placeholder="URL"><input id="titleA" placeholder="NAME" style="flex:0.6"><button class="accent" onclick="queue('A')">LOAD</button></div>
+      <div style="font-size:0.9rem;color:var(--text-dim)">PLAYLIST [<span id="countA">0</span>]</div>
       <ul id="listA"></ul>
     </div>
 
-    <!-- Channel B -->
     <div class="card channel-card chB">
       <h3 class="channel-title">🎵 CHANNEL B [MUSIC]</h3>
       <div class="status-bar">ACTIVE: <span id="nowTitleB" class="now-playing">NONE</span></div>
@@ -110,50 +311,46 @@
         <input type="number" min="0" max="10" value="3" id="crossfadeB" style="width:60px">s
       </div>
       <div class="row"><label>GAIN:</label><input type="range" min="0" max="100" value="100" id="volB"><span id="volValB">100%</span></div>
-      <div class="djOnly control-group">
-        <button class="control-btn" onclick="dj('prev',{channel:'B'})" title="PREVIOUS">⏮</button>
+      <div class="control-group">
+        <button class="control-btn" onclick="dj('prev',{channel:'B'})">⏮</button>
         <button class="control-btn" onclick="dj('toggle',{channel:'B'})" id="playB">▶</button>
-        <button class="control-btn" onclick="dj('next',{channel:'B'})" title="NEXT">⏭</button>
-        <button class="control-btn" onclick="dj('stop',{channel:'B'})" style="background:var(--accent-red);color:var(--bg-deep)" title="HALT">⏹</button>
+        <button class="control-btn" onclick="dj('next',{channel:'B'})">⏭</button>
+        <button class="control-btn" onclick="dj('stop',{channel:'B'})" style="background:var(--accent-red);color:var(--bg-deep)">⏹</button>
       </div>
-      <div class="djOnly row"><input id="urlB" placeholder="STREAM SOURCE URL"><input id="titleB" placeholder="IDENTIFIER" style="flex:0.6"><button class="accent" onclick="queue('B')">LOAD</button></div>
-      <div style="font-size:0.9rem;margin:0.5rem 0;color:var(--text-dim)">PLAYLIST [<span id="countB">0</span>]</div>
+      <div class="row"><input id="urlB" placeholder="URL"><input id="titleB" placeholder="NAME" style="flex:0.6"><button class="accent" onclick="queue('B')">LOAD</button></div>
+      <div style="font-size:0.9rem;color:var(--text-dim)">PLAYLIST [<span id="countB">0</span>]</div>
       <ul id="listB"></ul>
     </div>
   </div>
 </div>
 
-<audio id="audioA"></audio><audio id="audioB"></audio>
+<audio id="audioA"></audio>
+<audio id="audioB"></audio>
 <div id="ytA" style="width:1px;height:1px;overflow:hidden"></div>
 <div id="ytB" style="width:1px;height:1px;overflow:hidden"></div>
 
-<div class="system-status">SYSTEM VERSION 1.0 // AUDIO DISTRIBUTION NODE // ALL CONNECTIONS SECURE</div>
+<div class="system-status">SYSTEM VERSION 1.0 // AUDIO DISTRIBUTION NODE</div>
 
 <script src="/socket.io/socket.io.js"></script>
 <script>
 const socket = io();
 const params = new URLSearchParams(location.search);
 let roomId = null, djToken = null;
-const ytPlayers = { A: null, B: null };
-const audio = { A: document.getElementById("audioA"), B: document.getElementById("audioB") };
+let ytPlayers = { A: null, B: null };
+let audio = { A: document.getElementById("audioA"), B: document.getElementById("audioB") };
 let localMaster = 1, roomVol = { A: 1, B: 1 }, channelType = { A: null, B: null };
-let crossfadeTimes = { A: 3000, B: 3000 }; // Default 3 second crossfade
-let activeAudio = { A: null, B: null }; // Track what's currently playing for crossfade
-let audioEnabled = false;
+let crossfadeMs = { A: 3000, B: 3000 };
 
-// === AUDIO UNLOCK ===
-function unlockAudio() {
-  audioEnabled = true;
-  document.getElementById("audioUnlock").classList.add("hidden");
+// Click anywhere to unlock audio (browsers require this)
+document.body.addEventListener('click', () => {
   audio.A.play().then(() => audio.A.pause()).catch(()=>{});
   audio.B.play().then(() => audio.B.pause()).catch(()=>{});
-}
+}, { once: true });
 
-// === CREATE ROOM ===
 async function createRoom() {
   const name = document.getElementById("newRoomName").value.trim();
   const res = await fetch("/api/rooms", { method: "POST", headers: {"Content-Type":"application/json"}, body: JSON.stringify({ roomId: name }) });
-  if (!res.ok) return alert(await res.json().then(r=>r.error).catch(()=> "Could not create room."));
+  if (!res.ok) return alert("Could not create room.");
   const data = await res.json();
   localStorage.setItem("dj-" + data.roomId, data.djToken);
   document.getElementById("shareLink").textContent = location.origin + "/?room=" + data.roomId;
@@ -162,58 +359,27 @@ async function createRoom() {
   pendingRoom = data.roomId;
 }
 let pendingRoom = null;
-function enterRoom(isDj) { location.href = "/?room=" + (pendingRoom || roomId); }
+function enterRoom() { location.href = "/?room=" + (pendingRoom || roomId); }
 
-// === JOIN ROOM ===
 const urlRoom = params.get("room");
 if (urlRoom) {
   djToken = localStorage.getItem("dj-" + urlRoom) || null;
   roomId = urlRoom.replace(/[^a-z0-9-]/g, "");
+  socket.emit("join", roomId);
   
-  socket.on('connect', () => {
-    console.log("✅ Socket connected, joining room:", roomId);
-    document.getElementById("connectionStatus").textContent = "STATUS: ONLINE";
-  });
-  
-  socket.on('disconnect', () => {
-    console.log("❌ Socket disconnected");
-    document.getElementById("connectionStatus").textContent = "STATUS: DISCONNECTED";
-  });
-  
-  socket.on("state", (room) => {
-    console.log("📬 Received state event");
-    paint(room.channelA, "A"); 
-    paint(room.channelB, "B");
-  });
-  
-  socket.on("playlistUpdate", ({channelA, channelB}) => {
-    console.log("📬 Received playlist update");
-    paint(channelA, "A"); 
-    paint(channelB, "B");
-  });
+  socket.on("state", room => { paint(room.channelA, "A"); paint(room.channelB, "B"); });
+  socket.on("playlistUpdate", ({channelA, channelB}) => { paint(channelA, "A"); paint(channelB, "B"); });
   
   socket.on("nowPlaying", ({ channel, type, src, title, playing }) => {
-    console.log("📬 Now playing on channel:", channel, title);
-    
-    if (!src) {
-      stopChannel(channel);
-      return;
-    }
-    
+    if (!src) { stopChannel(channel); return; }
     channelType[channel] = type;
-    if (type === "file") {
-      playTrackWithCrossfade(channel, src, title);
-      if (ytPlayers[channel]?.stopVideo) ytPlayers[channel].stopVideo();
-    } else {
-      stopChannel(channel);
-      startYT(channel, src);
-    }
+    if (type === "file") { playTrackWithCrossfade(channel, src, title); }
+    else { stopChannel(channel); startYT(channel, src); }
   });
   
   socket.on("playbackState", ({ channel, playing }) => {
     document.getElementById("play" + channel).textContent = playing ? "⏸" : "▶";
     if (channelType[channel] === "file") playing ? audio[channel].play().catch(console.warn) : audio[channel].pause();
-    else if (ytPlayers[channel]) playing ? ytPlayers[channel].playVideo() : ytPlayers[channel].pauseVideo();
   });
   
   socket.on("volumeChange", ({ channel, volume }) => {
@@ -223,12 +389,8 @@ if (urlRoom) {
     applyVolumes();
   });
   
-  socket.on("roomNotFound", () => {
-    alert("Session not found (may have expired). Create a new room.");
-    location.href = "/";
-  });
+  socket.on("roomNotFound", () => { alert("Room not found."); location.href = "/"; });
   
-  socket.emit("join", roomId);
   document.getElementById("landing").classList.add("hidden");
   document.getElementById("room").classList.remove("hidden");
   document.getElementById("roomLabel").textContent = roomId;
@@ -236,9 +398,8 @@ if (urlRoom) {
   if (!djToken) document.querySelectorAll(".djOnly").forEach(el => el.classList.add("hidden"));
 }
 
-// === DJ ACTIONS ===
 function dj(action, payload) { 
-  if (!djToken) return console.log("No operator token");
+  if (!djToken) return;
   socket.emit("dj", { token: djToken, action, payload }); 
 }
 
@@ -247,11 +408,7 @@ function queue(ch) {
   const title = document.getElementById("title" + ch).value.trim() || "UNNAMED";
   if (!url) return alert("Paste a link first.");
   const m = url.match(/(?:youtu\.be\/|[?&]v=|shorts\/|embed\/)([\w-]{11})/);
-  let track;
-  if (m) { track = { type: "youtube", src: m[1], title }; }
-  else if (/tabletopaudio\.com/i.test(url)) { track = { type: "file", src: "/proxy/audio?url=" + encodeURIComponent(url), title }; }
-  else if (/\.(mp3|ogg|wav|m4a)(\?|$)/i.test(url)) { track = { type: "file", src: url, title }; }
-  else { return alert("Not a valid YouTube or audio file link."); }
+  let track = m ? { type: "youtube", src: m[1], title } : { type: "file", src: url, title };
   dj("queue", { channel: ch, ...track });
   document.getElementById("url" + ch).value = "";
   document.getElementById("title" + ch).value = "";
@@ -260,108 +417,60 @@ function queue(ch) {
 document.getElementById("volA").oninput = e => dj("volume", { channel: "A", volume: +e.target.value });
 document.getElementById("volB").oninput = e => dj("volume", { channel: "B", volume: +e.target.value });
 document.getElementById("masterVol").oninput = e => { localMaster = e.target.value/100; document.getElementById("masterVal").textContent = e.target.value+"%"; applyVolumes(); };
-
-// === CROSSFADE CONTROL ===
-document.getElementById("crossfadeA").addEventListener("change", e => {
-  crossfadeTimes.A = parseInt(e.target.value) * 1000;
-  console.log(`Crossfade A: ${crossfadeTimes.A}ms`);
-});
-document.getElementById("crossfadeB").addEventListener("change", e => {
-  crossfadeTimes.B = parseInt(e.target.value) * 1000;
-  console.log(`Crossfade B: ${crossfadeTimes.B}ms`);
-});
+document.getElementById("crossfadeA").addEventListener("change", e => crossfadeMs.A = parseInt(e.target.value) * 1000);
+document.getElementById("crossfadeB").addEventListener("change", e => crossfadeMs.B = parseInt(e.target.value) * 1000);
 
 function applyVolumes() {
-  if (!audioEnabled) return;
   audio.A.volume = roomVol.A * localMaster;
   audio.B.volume = roomVol.B * localMaster;
-  if (ytPlayers.A?.setVolume) ytPlayers.A.setVolume(roomVol.A * localMaster * 100);
-  if (ytPlayers.B?.setVolume) ytPlayers.B.setVolume(roomVol.B * localMaster * 100);
 }
 
-// === STOP CHANNEL ===
 function stopChannel(channel) {
   audio[channel].pause();
-  if (ytPlayers[channel]?.stopVideo) ytPlayers[channel].stopVideo();
-  if (activeAudio[channel]) clearTimeout(activeAudio[channel]);
   channelType[channel] = null;
-  activeAudio[channel] = null;
   document.getElementById("nowTitle" + channel).textContent = "NONE";
   document.getElementById("play" + channel).textContent = "▶";
 }
 
-// === PLAY TRACK WITH CROSSFADE ===
 function playTrackWithCrossfade(channel, src, title) {
-  if (!audioEnabled) {
-    console.log("⚠️ Audio not enabled, waiting for user interaction");
-    return;
-  }
-  
   const oldSrc = audio[channel].src;
-  const crossfadeMs = crossfadeTimes[channel];
+  const cfTime = crossfadeMs[channel];
   
   document.getElementById("nowTitle" + channel).textContent = title;
   document.getElementById("play" + channel).textContent = "⏸";
   
-  // If there's already audio playing, fade it out first
-  if (oldSrc && oldSrc !== src) {
-    console.log(`🎚️ Crossfading from "${audio[channel].dataset.title}" to "${title}"`);
-    
-    // Fade out old track
-    let fadeProgress = 0;
-    const fadeStep = 50;
-    const fadeInterval = setInterval(() => {
-      fadeProgress += fadeStep;
-      const remaining = 1 - (fadeProgress / crossfadeMs);
-      audio[channel].volume = remaining * (roomVol[channel] * localMaster);
+  if (oldSrc && oldSrc !== src && cfTime > 0) {
+    // Crossfade: fade out old, fade in new
+    let progress = 0;
+    const step = 50;
+    const interval = setInterval(() => {
+      progress += step;
+      audio[channel].volume = (1 - progress/cfTime) * (roomVol[channel] * localMaster);
       
-      if (fadeProgress >= crossfadeMs) {
-        clearInterval(fadeInterval);
+      if (progress >= cfTime) {
+        clearInterval(interval);
         audio[channel].pause();
-        // Now load and fade in new track
-        loadAndFadeIn(channel, src);
+        audio[channel].src = src;
+        audio[channel].volume = 0;
+        audio[channel].play().catch(()=>{});
+        
+        // Fade in
+        let fadeIn = 0;
+        const fadeInInt = setInterval(() => {
+          fadeIn += step;
+          audio[channel].volume = Math.min(1, fadeIn/cfTime) * (roomVol[channel] * localMaster);
+          if (fadeIn >= cfTime) clearInterval(fadeInInt);
+        }, step);
       }
-    }, fadeStep);
-    
-    activeAudio[channel] = fadeInterval;
+    }, step);
   } else {
-    // No transition needed, just play directly
-    loadAndFadeIn(channel, src);
+    // No crossfade, play directly
+    audio[channel].src = src;
+    audio[channel].volume = roomVol[channel] * localMaster;
+    audio[channel].play().catch(console.warn);
   }
 }
 
-// === FADE IN NEW TRACK ===
-function loadAndFadeIn(channel, src) {
-  audio[channel].src = src;
-  audio[channel].dataset.title = document.getElementById("nowTitle" + channel).textContent;
-  audio[channel].currentTime = 0;
-  audio[channel].volume = 0;
-  
-  audio[channel].play().catch(err => {
-    console.error("❌ Play failed:", err);
-    return;
-  });
-  
-  // Fade in
-  let fadeProgress = 0;
-  const fadeStep = 50;
-  const fadeInterval = setInterval(() => {
-    if (!audioEnabled) { clearInterval(fadeInterval); return; }
-    
-    fadeProgress += fadeStep;
-    const progress = Math.min(1, fadeProgress / crossfadeTimes[channel]);
-    audio[channel].volume = progress * (roomVol[channel] * localMaster);
-    
-    if (fadeProgress >= crossfadeTimes[channel]) {
-      clearInterval(fadeInterval);
-      console.log(`✅ Crossfade complete on channel ${channel}`);
-    }
-  }, fadeStep);
-  
-  activeAudio[channel] = fadeInterval;
-}
-
-// === RENDER PLAYLIST ===
 function paint(ch, id) {
   const ul = document.getElementById("list" + id);
   ul.innerHTML = "";
@@ -369,11 +478,9 @@ function paint(ch, id) {
     const li = document.createElement("li");
     li.innerHTML = `<span class="title">${i+1}. ${t.title}</span>`;
     if (i === ch.currentIndex) li.classList.add("active");
-    li.addEventListener("click", (e) => {
-      if (!e.target.classList.contains("remove")) dj("playTrack", { channel: id, index: i });
-    });
+    li.onclick = (e) => { if (!e.target.classList.contains("remove")) dj("playTrack", { channel: id, index: i }); };
     const btn = document.createElement("button");
-    btn.className = "remove"; btn.textContent = "×"; btn.title = "REMOVE";
+    btn.className = "remove"; btn.textContent = "×";
     btn.onclick = (e) => { e.stopPropagation(); dj("removeTrack", { channel: id, index: i }); };
     li.appendChild(btn);
     ul.appendChild(li);
@@ -381,18 +488,13 @@ function paint(ch, id) {
   document.getElementById("count" + id).textContent = ch.tracks.length;
 }
 
-// === AUTO-ADVANCE ON TRACK END ===
 setInterval(() => {
-  for (const ch of ["A","B"]) {
-    if (channelType[ch] === "file" && !audio[ch].paused && audio[ch].ended) {
-      socket.emit("trackEnded", ch);
-    } else if (ytPlayers[ch]?.getPlayerState?.() === 0) {
-      socket.emit("trackEnded", ch);
-    }
-  }
+  ["A","B"].forEach(ch => {
+    if (channelType[ch] === "file" && !audio[ch].paused && audio[ch].ended) socket.emit("trackEnded", ch);
+    else if (ytPlayers[ch]?.getPlayerState?.() === 0) socket.emit("trackEnded", ch);
+  });
 }, 1000);
 
-// === YOUTUBE PLAYER ===
 function startYT(channel, videoId) {
   if (!window.YT || !YT.Player) {
     const tag = document.createElement("script");
@@ -405,11 +507,9 @@ function startYT(channel, videoId) {
     ytPlayers[channel] = new YT.Player("yt" + channel, {
       videoId,
       playerVars: { autoplay: 1, controls: 0 },
-      events: { onReady: e => { e.target.playVideo(); applyVolumes(); } }
+      events: { onReady: e => { e.target.playVideo(); } }
     });
-  } else {
-    ytPlayers[channel].loadVideoById(videoId);
-  }
+  } else { ytPlayers[channel].loadVideoById(videoId); }
 }
 </script>
 </body>
