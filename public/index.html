@@ -71,7 +71,7 @@
   .system-status { text-align: center; color: var(--text-dim); font-size: 0.85rem; margin-top: 2rem; }
   label { color: var(--text-dim); font-size: 1rem; }
   
-  /* Audio unlock overlay */
+  /* Audio unlock overlay - ONLY SHOWS ONCE */
   #audioUnlock {
     position: fixed;
     top: 0;
@@ -114,8 +114,8 @@
 </head>
 <body>
 
-<!-- VISIBLE AUDIO UNLOCK OVERLAY -->
-<div id="audioUnlock">
+<!-- Audio unlock overlay - shown by JS after DOM loads, only once -->
+<div id="audioUnlock" style="display: none;">
   <h2>🔊 ENABLE AUDIO</h2>
   <p>Click below to enable sound playback for your session</p>
   <button class="accent" id="enableAudioBtn">ENABLE AUDIO SYSTEM</button>
@@ -214,13 +214,47 @@ let crossfadeMs = { A: 3000, B: 3000 };
 let audioUnlocked = false;
 let currentTrackSrc = { A: null, B: null };
 let isCrossfading = { A: false, B: false };
-let waitingForUnlock = []; // Queue of tracks to play after unlock
+let waitingForUnlock = [];
 
-// GUARANTEED OVERLAY HIDE
+// === CRITICAL FIX: Show overlay AFTER page fully loads, only once ===
+window.addEventListener("DOMContentLoaded", () => {
+  console.log("DOM loaded, checking if room URL exists...");
+  
+  const urlRoom = params.get("room");
+  if (urlRoom) {
+    console.log("✓ Found room URL, showing audio unlock overlay ONCE");
+    const overlay = document.getElementById("audioUnlock");
+    if (overlay) overlay.style.display = "flex";
+  } else {
+    console.log("✗ No room URL yet, will show overlay when joining room");
+  }
+  
+  // Attach button handler
+  const btn = document.getElementById("enableAudioBtn");
+  if (btn) {
+    btn.addEventListener("click", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      console.log("🖱️ Audio button clicked!");
+      unlockAudio();
+    });
+  }
+});
+
+// Show overlay when joining a room (only once per page load)
+function maybeShowOverlay() {
+  if (audioUnlocked) return; // Already unlocked, never show again
+  const overlay = document.getElementById("audioUnlock");
+  if (overlay && overlay.style.display !== "flex") {
+    console.log("📢 Showing audio unlock overlay");
+    overlay.style.display = "flex";
+  }
+}
+
 function unlockAudio() {
   console.log("🔓 unlockAudio() called");
   
-  // IMMEDIATELY hide overlay (force it)
+  // Force hide overlay
   const overlay = document.getElementById("audioUnlock");
   if (overlay) {
     overlay.style.display = "none";
@@ -231,7 +265,7 @@ function unlockAudio() {
   audioUnlocked = true;
   console.log("✅ Audio unlocked!");
   
-  // Play any queued tracks
+  // Process queued tracks
   console.log(`📋 Processing ${waitingForUnlock.length} queued tracks`);
   waitingForUnlock.forEach(item => {
     console.log(`▶️ Playing queued ${item.type} on channel ${item.channel}`);
@@ -247,19 +281,6 @@ function unlockAudio() {
   });
   waitingForUnlock = [];
 }
-
-// Attach event listener directly to button
-window.addEventListener("DOMContentLoaded", () => {
-  const btn = document.getElementById("enableAudioBtn");
-  if (btn) {
-    btn.addEventListener("click", (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      console.log("🖱️ Button clicked!");
-      unlockAudio();
-    });
-  }
-});
 
 async function createRoom() {
   const name = document.getElementById("newRoomName").value.trim();
@@ -279,6 +300,10 @@ const urlRoom = params.get("room");
 if (urlRoom) {
   djToken = localStorage.getItem("dj-" + urlRoom) || null;
   roomId = urlRoom.replace(/[^a-z0-9-]/g, "");
+  
+  // Show overlay only when joining room (if not already unlocked)
+  maybeShowOverlay();
+  
   socket.emit("join", roomId);
   
   socket.on("state", room => { paint(room.channelA, "A"); paint(room.channelB, "B"); });
@@ -384,8 +409,6 @@ function handleAudioFile(channel, newSrc) {
     if (audioUnlocked) {
       audio[channel].play().catch(err => console.error(`❌ Audio ${channel} play failed:`, err));
     } else {
-      // Queue for later
-      console.log(`⏳ Queued audio file on ${channel} for unlock`);
       waitingForUnlock.push({ channel, type: "file" });
     }
     currentTrackSrc[channel] = newSrc;
@@ -401,8 +424,9 @@ function performCrossfade(channel, newSrc, targetVol, cfTime) {
   const stepDelay = fadeDuration / fadeSteps;
   let step = 0;
   
-  console.log(`🎚️ Starting crossfade on ${channel}, duration: ${cfTime}ms`);
+  console.log(`🎚️ CROSSFADE on ${channel}: fade OUT (${cfTime/2}ms) → swap → fade IN (${cfTime/2}ms)`);
   
+  // Phase 1: FADE OUT old track
   const fadeOut = setInterval(() => {
     step++;
     const progress = step / fadeSteps;
@@ -411,6 +435,8 @@ function performCrossfade(channel, newSrc, targetVol, cfTime) {
     
     if (step >= fadeSteps) {
       clearInterval(fadeOut);
+      
+      // Phase 2: GAP + LOAD NEW TRACK
       setTimeout(() => {
         audio[channel].src = newSrc;
         audio[channel].currentTime = 0;
@@ -419,6 +445,7 @@ function performCrossfade(channel, newSrc, targetVol, cfTime) {
           audio[channel].play().catch(console.warn);
         }
         
+        // Phase 3: FADE IN new track
         let fadeStep = 0;
         const fadeIn = setInterval(() => {
           fadeStep++;
@@ -430,7 +457,7 @@ function performCrossfade(channel, newSrc, targetVol, cfTime) {
             clearInterval(fadeIn);
             isCrossfading[channel] = false;
             currentTrackSrc[channel] = newSrc;
-            console.log(`✅ Crossfade complete on ${channel}`);
+            console.log(`✅ CROSSFADE COMPLETE on ${channel}`);
           }
         }, stepDelay);
       }, 100);
@@ -468,7 +495,6 @@ function handleYouTube(channel, newSrc) {
       player.playVideo();
       console.log(`▶️ YouTube started on ${channel}`);
     } else {
-      console.log(`⏳ YouTube muted on ${channel}, waiting for unlock...`);
       waitingForUnlock.push({ channel, type: "youtube" });
     }
   };
@@ -493,7 +519,6 @@ function handleYouTube(channel, newSrc) {
       ytPlayers[channel].playVideo();
       console.log(`▶️ YouTube restarted on ${channel}`);
     } else {
-      console.log(`⏳ YouTube on ${channel} muted, waiting for unlock...`);
       waitingForUnlock.push({ channel, type: "youtube" });
     }
   }
@@ -509,8 +534,9 @@ function performYouTubeCrossfade(channel, newSrc, targetVol, cfTime) {
   const stepDelay = fadeDuration / fadeSteps;
   let step = 0;
   
-  console.log(`🎚️ Starting YouTube crossfade on ${channel}, duration: ${cfTime}ms`);
+  console.log(`🎚️ YOUTUBE CROSSFADE on ${channel}: fade OUT (${cfTime/2}ms) → swap → fade IN (${cfTime/2}ms)`);
   
+  // Phase 1: FADE OUT old video
   const fadeOut = setInterval(() => {
     step++;
     const progress = step / fadeSteps;
@@ -520,10 +546,12 @@ function performYouTubeCrossfade(channel, newSrc, targetVol, cfTime) {
     if (step >= fadeSteps) {
       clearInterval(fadeOut);
       
+      // Phase 2: GAP + LOAD NEW VIDEO
       setTimeout(() => {
         player.loadVideoById(newSrc);
         player.mute();
         
+        // Phase 3: FADE IN new video
         let fadeStep = 0;
         const fadeIn = setInterval(() => {
           fadeStep++;
@@ -537,7 +565,7 @@ function performYouTubeCrossfade(channel, newSrc, targetVol, cfTime) {
             player.playVideo();
             isCrossfading[channel] = false;
             currentTrackSrc[channel] = newSrc;
-            console.log(`✅ YouTube crossfade complete on ${channel}`);
+            console.log(`✅ YOUTUBE CROSSFADE COMPLETE on ${channel}`);
           }
         }, stepDelay);
       }, 100);
