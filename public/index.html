@@ -165,31 +165,39 @@ let localMaster = 1, roomVol = { A: 1, B: 1 }, channelType = { A: null, B: null 
 let crossfadeMs = { A: 3000, B: 3000 };
 let audioUnlocked = false;
 let currentTrackSrc = { A: null, B: null };
-let pendingYouTube = { A: null, B: null }; // Queue YouTube tracks until audio unlocked
+let waitingYouTube = { A: null, B: null }; // Track which video to unmute
 
-// Unlock audio on first click anywhere
+// CRITICAL FIX: Unlock on any click anywhere on the page
 document.body.addEventListener('click', () => {
   if (audioUnlocked) return;
   audioUnlocked = true;
-  console.log("✅ Audio unlocked");
+  console.log("✅ Audio unlocked by user click");
   
-  // Try to play any pending YouTube videos
-  if (pendingYouTube.A && ytPlayers.A) {
-    ytPlayers.A.unMute();
-    ytPlayers.A.playVideo();
-    pendingYouTube.A = null;
-    console.log("▶️ Unmuted and played YouTube A");
-  }
-  if (pendingYouTube.B && ytPlayers.B) {
-    ytPlayers.B.unMute();
-    ytPlayers.B.playVideo();
-    pendingYouTube.B = null;
-    console.log("▶️ Unmuted and played YouTube B");
-  }
+  // Unblock any audio files first
+  ['A','B'].forEach(ch => {
+    if (channelType[ch] === "file" && currentTrackSrc[ch] && audio[ch].src) {
+      audio[ch].play().catch(err => console.error(`❌ Audio ${ch} play failed:`, err));
+      console.log(`▶️ Started audio file on ${ch}`);
+    }
+  });
   
-  // Play audio files directly
-  audio.A.volume = roomVol.A * localMaster;
-  audio.B.volume = roomVol.B * localMaster;
+  // Unblock YouTube videos - this is the KEY fix!
+  ['A','B'].forEach(ch => {
+    if (ytPlayers[ch]) {
+      ytPlayers[ch].unMute();
+      ytPlayers[ch].setVolume(roomVol[ch] * localMaster * 100);
+      
+      if (waitingYouTube[ch] || ytPlayers[ch].getVideoData()?.video_id) {
+        ytPlayers[ch].playVideo();
+        waitingYouTube[ch] = null;
+        console.log(`▶️ Started YouTube on ${ch} (unmuted after click)`);
+      } else {
+        console.log(`⚠️ YouTube on ${ch} player exists but no video queued`);
+      }
+    } else if (waitingYouTube[ch]) {
+      console.log(`⏱️ YouTube ${ch} player not ready yet, waiting...`);
+    }
+  });
 }, { once: true });
 
 async function createRoom() {
@@ -295,9 +303,10 @@ function stopChannel(channel) {
   document.getElementById("nowTitle" + channel).textContent = "NONE";
   document.getElementById("play" + channel).textContent = "▶";
   currentTrackSrc[channel] = null;
-  pendingYouTube[channel] = null;
+  waitingYouTube[channel] = null;
 }
 
+// AUDIO FILE HANDLING WITH CROSSFADE RESTORED
 function handleAudioFile(channel, newSrc) {
   const cfTime = crossfadeMs[channel];
   const targetVol = roomVol[channel] * localMaster;
@@ -305,19 +314,65 @@ function handleAudioFile(channel, newSrc) {
   const srcChanged = currentTrackSrc[channel] !== newSrc;
   
   if (wasPlaying && srcChanged && cfTime > 0) {
+    // Perform crossfade
     performCrossfade(channel, newSrc, targetVol, cfTime);
   } else {
+    // Play directly
     audio[channel].src = newSrc;
     audio[channel].volume = targetVol;
     if (audioUnlocked) {
-      audio[channel].play().catch(err => console.error("❌ Play failed:", err));
+      audio[channel].play().catch(err => console.error(`❌ Audio ${channel} play failed:`, err));
     } else {
-      console.log(`⏳ Waiting for audio unlock to play file on ${channel}`);
+      console.log(`⏳ Audio file on ${channel} waiting for unlock`);
     }
     currentTrackSrc[channel] = newSrc;
   }
 }
 
+// CROSSFADE LOGIC RESTORED
+function performCrossfade(channel, newSrc, targetVol, cfTime) {
+  const fadeSteps = 20;
+  const fadeDuration = cfTime / 2;
+  const stepDelay = fadeDuration / fadeSteps;
+  let step = 0;
+  
+  console.log(`🎚️ Starting crossfade on ${channel}, duration: ${cfTime}ms`);
+  
+  const fadeOut = setInterval(() => {
+    step++;
+    const progress = step / fadeSteps;
+    const vol = Math.max(0, (1 - progress) * targetVol);
+    audio[channel].volume = vol;
+    
+    if (step >= fadeSteps) {
+      clearInterval(fadeOut);
+      setTimeout(() => {
+        audio[channel].src = newSrc;
+        audio[channel].currentTime = 0;
+        
+        if (audioUnlocked) {
+          audio[channel].play().catch(console.warn);
+        }
+        
+        let fadeStep = 0;
+        const fadeIn = setInterval(() => {
+          fadeStep++;
+          const progress = fadeStep / fadeSteps;
+          const vol = Math.min(targetVol, progress * targetVol);
+          audio[channel].volume = vol;
+          
+          if (fadeStep >= fadeSteps) {
+            clearInterval(fadeIn);
+            currentTrackSrc[channel] = newSrc;
+            console.log(`✅ Crossfade complete on ${channel}`);
+          }
+        }, stepDelay);
+      }, 100);
+    }
+  }, stepDelay);
+}
+
+// YOUTUBE HANDLING WITH UNMUTE QUEUE
 function handleYouTube(channel, newSrc) {
   if (!window.YT || !YT.Player) {
     const tag = document.createElement("script");
@@ -327,96 +382,53 @@ function handleYouTube(channel, newSrc) {
     return;
   }
   
-  // FIX: Start YOUTUBE MUTED first!
+  const onCreate = (player) => {
+    player.mute();  // Start muted (required by YouTube autoplay policy)
+    currentTrackSrc[channel] = newSrc;
+    waitingYouTube[channel] = newSrc;
+    applyVolumes();
+    
+    console.log(`📺 YouTube player created on ${channel}, video: ${newSrc}`);
+    
+    if (audioUnlocked) {
+      player.unMute();
+      player.playVideo();
+      player.setVolume(roomVol[channel] * localMaster * 100);
+      waitingYouTube[channel] = null;
+      console.log(`▶️ YouTube started on ${channel} (already unlocked)`);
+    } else {
+      console.log(`⏳ YouTube muted on ${channel}, waiting for user click...`);
+    }
+  };
+  
   if (!ytPlayers[channel]) {
     ytPlayers[channel] = new YT.Player("yt" + channel, {
       videoId: newSrc,
-      playerVars: { 
-        autoplay: 0,    // Don't autoplay initially
-        controls: 0,
-        mute: 1         // START MUTED!
-      },
-      events: { 
-        onReady: e => { 
-          e.target.mute();  // Ensure muted
-          currentTrackSrc[channel] = newSrc;
-          pendingYouTube[channel] = newSrc;  // Remember this track
-          
-          if (audioUnlocked) {
-            // User already interacted, unmute and play now
-            e.target.unMute();
-            e.target.playVideo();
-            pendingYouTube[channel] = null;
-            console.log(`▶️ Played YouTube on ${channel} (audio already unlocked)`);
-          } else {
-            console.log(`⏳ YouTube loaded muted on ${channel}, waiting for user click...`);
-          }
-        },
+      playerVars: { autoplay: 0, controls: 0, mute: 1 },
+      events: {
+        onReady: e => onCreate(e.target),
         onStateChange: e => { if (e.data === 0) socket.emit("trackEnded", channel); }
       }
     });
   } else {
-    // Player exists, just change track (still muted initially)
-    ytPlayers[channel].loadVideoById(newSrc);
-    ytPlayers[channel].mute();  // Keep it muted
+    // Player exists, just change track
     currentTrackSrc[channel] = newSrc;
-    pendingYouTube[channel] = newSrc;
+    waitingYouTube[channel] = newSrc;
+    ytPlayers[channel].loadVideoById(newSrc);
+    ytPlayers[channel].mute();  // Re-mute on track change
+    
+    console.log(`📺 YouTube track changed on ${channel}, video: ${newSrc}`);
     
     if (audioUnlocked) {
       ytPlayers[channel].unMute();
       ytPlayers[channel].playVideo();
-      pendingYouTube[channel] = null;
-      console.log(`▶️ Played YouTube on ${channel} (audio already unlocked)`);
+      ytPlayers[channel].setVolume(roomVol[channel] * localMaster * 100);
+      waitingYouTube[channel] = null;
+      console.log(`▶️ YouTube restarted on ${channel} (already unlocked)`);
     } else {
-      console.log(`⏳ YouTube loaded muted on ${channel}, waiting for user click...`);
+      console.log(`⏳ YouTube on ${channel} muted, waiting for unlock...`);
     }
   }
-}
-
-// Apply volume settings after audio is unlocked
-function applyVolumes() {
-  const targetVol = roomVol.A * localMaster;
-  audio.A.volume = targetVol;
-  audio.B.volume = roomVol.B * localMaster;
-  if (ytPlayers.A?.setVolume) ytPlayers.A.setVolume(targetVol * 100);
-  if (ytPlayers.B?.setVolume) ytPlayers.B.setVolume(roomVol.B * localMaster * 100);
-}
-
-// Crossfade logic stays the same
-function performCrossfade(channel, newSrc, targetVol, cfTime) {
-  const fadeSteps = 20;
-  const fadeDuration = cfTime / 2;
-  const stepDelay = fadeDuration / fadeSteps;
-  let step = 0;
-  
-  const fadeOut = setInterval(() => {
-    step++;
-    const progress = step / fadeSteps;
-    const vol = (1 - progress) * targetVol;
-    audio[channel].volume = Math.max(0, vol);
-    
-    if (step >= fadeSteps) {
-      clearInterval(fadeOut);
-      setTimeout(() => {
-        audio[channel].src = newSrc;
-        audio[channel].currentTime = 0;
-        audio[channel].play().catch(console.warn);
-        
-        let fadeStep = 0;
-        const fadeIn = setInterval(() => {
-          fadeStep++;
-          const progress = fadeStep / fadeSteps;
-          const vol = progress * targetVol;
-          audio[channel].volume = Math.min(targetVol, vol);
-          
-          if (fadeStep >= fadeSteps) {
-            clearInterval(fadeIn);
-            currentTrackSrc[channel] = newSrc;
-          }
-        }, stepDelay);
-      }, 100);
-    }
-  }, stepDelay);
 }
 
 function paint(ch, id) {
