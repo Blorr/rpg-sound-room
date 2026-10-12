@@ -10,8 +10,18 @@ app.use(express.static("public"));
 const server = http.createServer(app);
 const io = new Server(server);
 
-const blankChannel = () => ({ tracks: [], currentIndex: -1, playing: false, position: 0, updatedAt: Date.now(), volume: 100 });
+const blankChannel = () => ({ 
+  tracks: [], 
+  currentIndex: -1, 
+  playing: false, 
+  position: 0, 
+  updatedAt: Date.now(), 
+  volume: 100,
+  repeat: false
+});
+
 const rooms = new Map();
+const roomActivity = new Map();
 
 app.post("/api/rooms", (req, res) => {
   const wanted = (req.body.roomId || "").trim().replace(/[^a-z0-9-]/gi, "").slice(0, 32);
@@ -26,9 +36,14 @@ app.post("/api/rooms", (req, res) => {
     channelB: blankChannel(), 
     crossfade: 3 
   });
+  roomActivity.set(id, Date.now());
   
   console.log(`📦 Created room: ${id}`);
   res.json({ roomId: id, djToken });
+});
+
+app.get("/health", (req, res) => {
+  res.json({ status: "ok", rooms: rooms.size, timestamp: Date.now() });
 });
 
 app.get("/proxy/audio", async (req, res) => {
@@ -66,30 +81,34 @@ io.on("connection", (socket) => {
     roomId = id;
     socket.join(roomId);
     const room = rooms.get(roomId);
+    roomActivity.set(id, Date.now());
     socket.emit("state", room);
     
-    // FIX: Send nowPlaying for any tracks that ARE ACTUALLY PLAYING
     ["A", "B"].forEach(chId => {
       const ch = chId === "A" ? room.channelA : room.channelB;
       if (ch.currentIndex >= 0 && ch.tracks[ch.currentIndex]) {
         socket.emit("nowPlaying", {
           channel: chId,
           ...ch.tracks[ch.currentIndex],
-          playing: ch.playing,  // IMPORTANT: send actual playing state
+          playing: ch.playing,
           volume: ch.volume
         });
-        console.log(`📬 Sent nowPlaying to new client for channel ${chId}, playing: ${ch.playing}`);
       }
     });
     
-    console.log(`🔗 Client joined room: ${roomId}`);
+    console.log(`🔗 Client joined room: ${roomId} (total: ${io.sockets.adapter.rooms.get(roomId)?.size})`);
+  });
+
+  socket.on("ping", () => {
+    socket.emit("pong");
+    if (roomId) roomActivity.set(roomId, Date.now());
   });
 
   socket.on("dj", ({ token, action, payload }) => {
     const room = rooms.get(roomId);
     if (!room) return console.log("❌ Room not found for DJ action");
     if (token !== room.djToken) return console.log("❌ Invalid DJ token");
-    console.log(`🎛️ DJ action: ${action} on channel ${payload?.channel}`);
+    if (roomId) roomActivity.set(roomId, Date.now());
     handleAction(action, payload, room, roomId);
   });
 
@@ -97,12 +116,23 @@ io.on("connection", (socket) => {
     const room = rooms.get(roomId);
     if (!room) return;
     
-    const ch = room[channel];
+    const ch = channel === "A" ? room.channelA : room.channelB;
     const now = Date.now();
     
     if (now - ch.updatedAt < 3000 || ch.currentIndex < 0) return;
     
-    if (ch.currentIndex < ch.tracks.length - 1) {
+    if (ch.repeat) {
+      ch.currentIndex = ch.currentIndex;
+      ch.playing = true;
+      ch.position = 0;
+      ch.updatedAt = now;
+      io.to(roomId).emit("nowPlaying", { 
+        channel, 
+        ...ch.tracks[ch.currentIndex], 
+        playing: true, 
+        volume: ch.volume 
+      });
+    } else if (ch.currentIndex < ch.tracks.length - 1) {
       ch.currentIndex++;
       ch.playing = true;
       ch.position = 0;
@@ -113,7 +143,6 @@ io.on("connection", (socket) => {
         playing: true, 
         volume: ch.volume 
       });
-      console.log(`🔄 Auto-advance to track ${ch.currentIndex + 1} on channel ${channel}`);
     }
   });
 
@@ -132,152 +161,33 @@ io.on("connection", (socket) => {
         });
       }
     });
-    console.log(`🔄 Forced state sync to ${io.sockets.adapter.rooms.get(roomId)?.size} clients`);
   });
 
-  socket.on("disconnect", () => {
+  socket.on("disconnect", (reason) => {
+    console.log(`❌ Client disconnected from ${roomId}: ${reason}`);
     if (!roomId) return;
+    
     const stillHere = io.sockets.adapter.rooms.get(roomId)?.size ?? 0;
-    if (stillHere === 0) setTimeout(() => {
-      if ((io.sockets.adapter_rooms.get(roomId)?.size ?? 0) === 0) {
-        rooms.delete(roomId);
-        console.log(`🗑️ Deleted empty room: ${roomId}`);
-      }
-    }, 10 * 60 * 1000);
+    console.log(`📊 Remaining clients in ${roomId}: ${stillHere}`);
+    
+    if (stillHere === 0) {
+      setTimeout(() => {
+        const count = io.sockets.adapter.rooms.get(roomId)?.size ?? 0;
+        if (count === 0) {
+          rooms.delete(roomId);
+          roomActivity.delete(roomId);
+          console.log(`🗑️ Deleted empty room: ${roomId}`);
+        }
+      }, 10 * 60 * 1000);
+    }
   });
 });
 
-function handleAction(action, p, room, roomId) {
-  if (!p || !p.channel) {
-    console.log("⚠️ Missing payload/channel in DJ action");
-    return;
+setInterval(() => {
+  if (rooms.size > 0) {
+    console.log(`📊 Active rooms: ${rooms.size}, Activity timestamps:`, [...roomActivity.entries()].map(([r, t]) => `${r}:${t}`).join(", "));
   }
-  const ch = p.channel === "A" ? room.channelA : room.channelB;
-  
-  switch (action) {
-    case "queue":
-      ch.tracks.push({ type: p.type, src: p.src, title: p.title });
-      console.log(`➕ Queued "${p.title}" to channel ${p.channel}`);
-      break;
-      
-    case "playTrack":
-      if (p.index < 0 || p.index >= ch.tracks.length) {
-        console.log(`⚠️ Invalid track index: ${p.index}`);
-        return;
-      }
-      ch.currentIndex = p.index;
-      ch.playing = true;
-      ch.position = 0;
-      ch.updatedAt = Date.now();
-      io.to(roomId).emit("nowPlaying", { 
-        channel: p.channel, 
-        ...ch.tracks[p.index], 
-        playing: true, 
-        volume: ch.volume 
-      });
-      console.log(`▶️ Playing track ${p.index} on channel ${p.channel}`);
-      break;
-      
-    case "prev":
-      if (ch.currentIndex > 0) {
-        ch.currentIndex--;
-        ch.playing = true;
-        ch.position = 0;
-        ch.updatedAt = Date.now();
-        io.to(roomId).emit("nowPlaying", { 
-          channel: p.channel, 
-          ...ch.tracks[ch.currentIndex], 
-          playing: true, 
-          volume: ch.volume 
-        });
-      }
-      break;
-      
-    case "next":
-      if (ch.currentIndex >= 0 && ch.currentIndex < ch.tracks.length - 1) {
-        ch.currentIndex++;
-        ch.playing = true;
-        ch.position = 0;
-        ch.updatedAt = Date.now();
-        io.to(roomId).emit("nowPlaying", { 
-          channel: p.channel, 
-          ...ch.tracks[ch.currentIndex], 
-          playing: true, 
-          volume: ch.volume 
-        });
-      }
-      break;
-      
-    case "removeTrack":
-      ch.tracks.splice(p.index, 1);
-      if (ch.currentIndex >= ch.tracks.length) ch.currentIndex = ch.tracks.length - 1;
-      if (ch.currentIndex < 0) ch.currentIndex = -1;
-      if (ch.currentIndex === p.index) {
-        ch.playing = false;
-        io.to(roomId).emit("nowPlaying", { 
-          channel: p.channel, 
-          src: null, 
-          title: null, 
-          playing: false 
-        });
-      }
-      break;
-      
-    case "toggle":
-      if (ch.currentIndex < 0) {
-        if (ch.tracks.length === 0) return;
-        ch.currentIndex = 0;
-        ch.playing = true;
-        ch.position = 0;
-        ch.updatedAt = Date.now();
-        io.to(roomId).emit("nowPlaying", { 
-          channel: p.channel, 
-          ...ch.tracks[ch.currentIndex], 
-          playing: true, 
-          volume: ch.volume 
-        });
-        break;
-      }
-      ch.playing = !ch.playing;
-      ch.updatedAt = Date.now();
-      io.to(roomId).emit("playbackState", { 
-        channel: p.channel, 
-        playing: ch.playing 
-      });
-      break;
-      
-    case "stop":
-      // FIX: Set playing=false WITHOUT clearing currentIndex
-      ch.playing = false;
-      ch.updatedAt = Date.now();
-      io.to(roomId).emit("nowPlaying", { 
-        channel: p.channel, 
-        src: null, 
-        title: null, 
-        playing: false 
-      });
-      console.log(`⏹ Stopped channel ${p.channel}, tracks preserved: ${ch.tracks.length}`);
-      break;
-      
-    case "volume":
-      ch.volume = Math.max(0, Math.min(100, p.volume));
-      io.to(roomId).emit("volumeChange", { 
-        channel: p.channel, 
-        volume: ch.volume 
-      });
-      break;
-      
-    case "crossfade":
-      room.crossfade = p.seconds;
-      io.to(roomId).emit("crossfadeUpdate", p.seconds);
-      break;
-  }
-  
-  io.to(roomId).emit("playlistUpdate", { 
-    channelA: room.channelA, 
-    channelB: room.channelB 
-  });
-}
+}, 60000);
 
 server.listen(process.env.PORT || 3000, () => {
   console.log(`🎲 RPG Sound Room running on http://localhost:${process.env.PORT || 3000}`);

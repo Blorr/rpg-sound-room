@@ -3,6 +3,7 @@
 <head>
 <meta charset="utf-8">
 <title>RPG Sound Room - STATION</title>
+<meta name="referrer" content="origin">
 <style>
   @import url('https://fonts.googleapis.com/css2?family=VT323&display=swap');
   
@@ -71,7 +72,13 @@
   .system-status { text-align: center; color: var(--text-dim); font-size: 0.85rem; margin-top: 2rem; }
   label { color: var(--text-dim); font-size: 1rem; }
   
-  /* Audio unlock overlay - ONLY SHOWS ONCE */
+  .repeat-active {
+    color: var(--accent-orange) !important;
+    background: rgba(255, 170, 85, 0.3) !important;
+    border-color: var(--accent-orange) !important;
+    box-shadow: 0 0 10px rgba(255, 170, 85, 0.5);
+  }
+  
   #audioUnlock {
     position: fixed;
     top: 0;
@@ -114,7 +121,6 @@
 </head>
 <body>
 
-<!-- Audio unlock overlay - shown by JS after DOM loads, only once -->
 <div id="audioUnlock" style="display: none;">
   <h2>🔊 ENABLE AUDIO</h2>
   <p>Click below to enable sound playback for your session</p>
@@ -151,7 +157,7 @@
       <input type="range" min="0" max="100" value="100" id="masterVol" style="max-width:200px">
       <span id="masterVal">100%</span>
     </div>
-    <div class="status-bar">STATUS: ONLINE</div>
+    <div class="status-bar" id="connectionStatus">STATUS: ONLINE</div>
   </div>
 
   <div id="djControls" class="cols djOnly">
@@ -164,6 +170,7 @@
       </div>
       <div class="row"><label>GAIN:</label><input type="range" min="0" max="100" value="100" id="volA"><span id="volValA">100%</span></div>
       <div class="control-group">
+        <button class="control-btn" onclick="dj('repeat',{channel:'A'})" id="repeatA" title="REPEAT TRACK">🔁</button>
         <button class="control-btn" onclick="dj('prev',{channel:'A'})">⏮</button>
         <button class="control-btn" onclick="dj('toggle',{channel:'A'})" id="playA">▶</button>
         <button class="control-btn" onclick="dj('next',{channel:'A'})">⏭</button>
@@ -183,6 +190,7 @@
       </div>
       <div class="row"><label>GAIN:</label><input type="range" min="0" max="100" value="100" id="volB"><span id="volValB">100%</span></div>
       <div class="control-group">
+        <button class="control-btn" onclick="dj('repeat',{channel:'B'})" id="repeatB" title="REPEAT TRACK">🔁</button>
         <button class="control-btn" onclick="dj('prev',{channel:'B'})">⏮</button>
         <button class="control-btn" onclick="dj('toggle',{channel:'B'})" id="playB">▶</button>
         <button class="control-btn" onclick="dj('next',{channel:'B'})">⏭</button>
@@ -204,7 +212,13 @@
 
 <script src="/socket.io/socket.io.js"></script>
 <script>
-const socket = io();
+const socket = io({
+  reconnection: true,
+  reconnectionDelay: 1000,
+  reconnectionDelayMax: 5000,
+  reconnectionAttempts: Infinity,
+  transports: ["websocket", "polling"]
+});
 const params = new URLSearchParams(location.search);
 let roomId = null, djToken = null;
 let ytPlayers = { A: null, B: null };
@@ -215,68 +229,90 @@ let audioUnlocked = false;
 let currentTrackSrc = { A: null, B: null };
 let isCrossfading = { A: false, B: false };
 let waitingForUnlock = [];
+let reconnectAttempts = 0;
+let transitionGen = { A: 0, B: 0 };
+let fadeTimers = { A: [], B: [] };
+let pendingRejoin = false;
 
-// === CRITICAL FIX: Show overlay AFTER page fully loads, only once ===
+document.addEventListener("visibilitychange", () => {
+  if (!document.hidden) {
+    document.getElementById("connectionStatus").textContent = socket.connected ? "STATUS: ONLINE" : "STATUS: RECONNECTING...";
+    if (socket.connected && pendingRejoin && roomId) {
+      console.log("🔄 Tab visible, triggering rejoin");
+      socket.emit("join", roomId);
+      pendingRejoin = false;
+    }
+  } else {
+    document.getElementById("connectionStatus").textContent = "STATUS: BACKGROUND";
+  }
+});
+
+setInterval(() => { if (socket.connected) { socket.emit("ping"); } }, 30000);
+socket.on("pong", () => { console.log("❤️ Heartbeat acknowledged"); });
+
+socket.on("disconnect", (reason) => {
+  console.log(`❌ Disconnected: ${reason}`);
+  document.getElementById("connectionStatus").textContent = "STATUS: DISCONNECTED (reconnecting...)";
+  pendingRejoin = true;
+});
+
+socket.on("connect", () => {
+  console.log("✅ Connected");
+  document.getElementById("connectionStatus").textContent = "STATUS: ONLINE";
+  if (pendingRejoin && roomId) {
+    console.log("🔄 Rejoining room after reconnection");
+    socket.emit("join", roomId);
+    pendingRejoin = false;
+  } else if (reconnectAttempts > 0 && roomId) {
+    socket.emit("join", roomId);
+    reconnectAttempts = 0;
+  }
+});
+
+socket.on("connect_error", (err) => {
+  console.error("❌ Connect error:", err.message);
+  reconnectAttempts++;
+  document.getElementById("connectionStatus").textContent = `STATUS: ERROR (${reconnectAttempts})`;
+});
+
 window.addEventListener("DOMContentLoaded", () => {
-  console.log("DOM loaded, checking if room URL exists...");
-  
   const urlRoom = params.get("room");
   if (urlRoom) {
-    console.log("✓ Found room URL, showing audio unlock overlay ONCE");
     const overlay = document.getElementById("audioUnlock");
     if (overlay) overlay.style.display = "flex";
-  } else {
-    console.log("✗ No room URL yet, will show overlay when joining room");
   }
-  
-  // Attach button handler
   const btn = document.getElementById("enableAudioBtn");
   if (btn) {
     btn.addEventListener("click", (e) => {
       e.preventDefault();
       e.stopPropagation();
-      console.log("🖱️ Audio button clicked!");
       unlockAudio();
     });
   }
 });
 
-// Show overlay when joining a room (only once per page load)
-function maybeShowOverlay() {
-  if (audioUnlocked) return; // Already unlocked, never show again
-  const overlay = document.getElementById("audioUnlock");
-  if (overlay && overlay.style.display !== "flex") {
-    console.log("📢 Showing audio unlock overlay");
-    overlay.style.display = "flex";
-  }
-}
-
 function unlockAudio() {
-  console.log("🔓 unlockAudio() called");
+  if (audioUnlocked) return;
+  audioUnlocked = true;
   
-  // Force hide overlay
   const overlay = document.getElementById("audioUnlock");
   if (overlay) {
     overlay.style.display = "none";
     overlay.classList.add("hidden");
   }
   
-  if (audioUnlocked) return;
-  audioUnlocked = true;
-  console.log("✅ Audio unlocked!");
+  if ("mediaSession" in navigator) {
+    navigator.mediaSession.setActionHandler("play", () => {});
+    navigator.mediaSession.setActionHandler("pause", () => {});
+  }
   
-  // Process queued tracks
-  console.log(`📋 Processing ${waitingForUnlock.length} queued tracks`);
   waitingForUnlock.forEach(item => {
-    console.log(`▶️ Playing queued ${item.type} on channel ${item.channel}`);
     if (item.type === "file") {
       audio[item.channel].play().catch(console.warn);
-    } else {
-      if (ytPlayers[item.channel]) {
-        ytPlayers[item.channel].unMute();
-        ytPlayers[item.channel].setVolume(roomVol[item.channel] * localMaster * 100);
-        ytPlayers[item.channel].playVideo();
-      }
+    } else if (ytPlayers[item.channel]) {
+      ytPlayers[item.channel].unMute();
+      ytPlayers[item.channel].setVolume(roomVol[item.channel] * localMaster * 100);
+      ytPlayers[item.channel].playVideo();
     }
   });
   waitingForUnlock = [];
@@ -300,33 +336,29 @@ const urlRoom = params.get("room");
 if (urlRoom) {
   djToken = localStorage.getItem("dj-" + urlRoom) || null;
   roomId = urlRoom.replace(/[^a-z0-9-]/g, "");
-  
-  // Show overlay only when joining room (if not already unlocked)
-  maybeShowOverlay();
-  
   socket.emit("join", roomId);
-  
-  socket.on("state", room => { paint(room.channelA, "A"); paint(room.channelB, "B"); });
+
+  socket.on("state", room => {
+    paint(room.channelA, "A");
+    paint(room.channelB, "B");
+    updateRepeatButtons(room.channelA.repeat, room.channelB.repeat);
+  });
   socket.on("playlistUpdate", ({channelA, channelB}) => { paint(channelA, "A"); paint(channelB, "B"); });
-  
+  socket.on("repeatUpdate", ({ channel, repeat }) => {
+    const btn = document.getElementById("repeat" + channel);
+    if (btn) repeat ? btn.classList.add("repeat-active") : btn.classList.remove("repeat-active");
+  });
   socket.on("nowPlaying", ({ channel, type, src, title, playing }) => {
-    console.log(`📬 nowPlaying: channel=${channel}, src=${src}, playing=${playing}`);
-    
     if (src && playing === true) {
       channelType[channel] = type;
       document.getElementById("nowTitle" + channel).textContent = title;
       document.getElementById("play" + channel).textContent = "⏸";
-      
-      if (type === "file") {
-        handleAudioFile(channel, src);
-      } else {
-        handleYouTube(channel, src);
-      }
-    } else if (src === null || playing === false) {
+      if (type === "file") handleAudioFile(channel, src);
+      else handleYouTube(channel, src);
+    } else {
       stopChannel(channel);
     }
   });
-  
   socket.on("playbackState", ({ channel, playing }) => {
     document.getElementById("play" + channel).textContent = playing ? "⏸" : "▶";
     if (channelType[channel] === "file") {
@@ -335,16 +367,14 @@ if (urlRoom) {
       playing ? ytPlayers[channel].playVideo() : ytPlayers[channel].pauseVideo();
     }
   });
-  
   socket.on("volumeChange", ({ channel, volume }) => {
     roomVol[channel] = volume/100;
     document.getElementById("vol" + channel).value = volume;
     document.getElementById("volVal" + channel).textContent = volume + "%";
     applyVolumes();
   });
-  
   socket.on("roomNotFound", () => { alert("Room not found."); location.href = "/"; });
-  
+
   document.getElementById("landing").classList.add("hidden");
   document.getElementById("room").classList.remove("hidden");
   document.getElementById("roomLabel").textContent = roomId;
@@ -352,12 +382,14 @@ if (urlRoom) {
   if (!djToken) document.querySelectorAll(".djOnly").forEach(el => el.classList.add("hidden"));
 }
 
-function dj(action, payload) { 
-  if (!djToken) return;
-  socket.emit("dj", { token: djToken, action, payload }); 
+function dj(action, payload) {
+  if (!djToken) { alert("Not the operator!"); return; }
+  if (!socket.connected) { alert("Connection lost. Refresh page."); return; }
+  socket.emit("dj", { token: djToken, action, payload });
 }
 
 function queue(ch) {
+  if (!socket.connected) { alert("Connection lost. Refresh page."); return; }
   const url = document.getElementById("url" + ch).value.trim();
   const title = document.getElementById("title" + ch).value.trim() || "UNNAMED";
   if (!url) return alert("Paste a link first.");
@@ -375,94 +407,87 @@ document.getElementById("crossfadeA").addEventListener("change", e => crossfadeM
 document.getElementById("crossfadeB").addEventListener("change", e => crossfadeMs.B = parseInt(e.target.value) * 1000);
 
 function applyVolumes() {
-  const targetVol = roomVol.A * localMaster;
-  audio.A.volume = targetVol;
-  audio.B.volume = roomVol.B * localMaster;
-  if (ytPlayers.A?.setVolume) ytPlayers.A.setVolume(targetVol * 100);
-  if (ytPlayers.B?.setVolume) ytPlayers.B.setVolume(roomVol.B * localMaster * 100);
+  if (!isCrossfading.A) audio.A.volume = roomVol.A * localMaster;
+  if (!isCrossfading.B) audio.B.volume = roomVol.B * localMaster;
+  if (!isCrossfading.A && ytPlayers.A?.setVolume) ytPlayers.A.setVolume(roomVol.A * localMaster * 100);
+  if (!isCrossfading.B && ytPlayers.B?.setVolume) ytPlayers.B.setVolume(roomVol.B * localMaster * 100);
 }
 
-function stopChannel(channel) {
-  audio[channel].pause();
-  if (ytPlayers[channel]?.stopVideo) ytPlayers[channel].stopVideo();
-  if (isCrossfading[channel]) {
-    clearInterval(window.crossfadeTimer);
-    isCrossfading[channel] = false;
-  }
-  channelType[channel] = null;
-  document.getElementById("nowTitle" + channel).textContent = "NONE";
-  document.getElementById("play" + channel).textContent = "▶";
-  currentTrackSrc[channel] = null;
+function clearFadeTimers(channel) {
+  fadeTimers[channel].forEach(t => { clearInterval(t); clearTimeout(t); });
+  fadeTimers[channel] = [];
+}
+
+function runFade(channel, from, to, duration, setVol) {
+  return new Promise(resolve => {
+    const gen = transitionGen[channel];
+    const steps = 20;
+    const delay = duration / steps;
+    let i = 0;
+    if (duration <= 0) { setVol(to); return resolve(); }
+    const t = setInterval(() => {
+      if (transitionGen[channel] !== gen) { clearInterval(t); return resolve(); }
+      i++;
+      setVol(from + (to - from) * Math.min(1, i / steps));
+      if (i >= steps) { clearInterval(t); resolve(); }
+    }, delay);
+    fadeTimers[channel].push(t);
+  });
+}
+
+function abortTransition(channel) {
+  transitionGen[channel]++;
+  clearFadeTimers(channel);
+  isCrossfading[channel] = false;
+}
+
+function shouldCrossfade(channel, newSrc) {
+  const cfTime = crossfadeMs[channel];
+  const hadTrack = !!currentTrackSrc[channel];
+  const srcChanged = currentTrackSrc[channel] !== newSrc;
+  return hadTrack && srcChanged && cfTime > 0 && audioUnlocked;
 }
 
 function handleAudioFile(channel, newSrc) {
-  const cfTime = crossfadeMs[channel];
   const targetVol = roomVol[channel] * localMaster;
-  const wasPlaying = !!currentTrackSrc[channel];
-  const srcChanged = currentTrackSrc[channel] !== newSrc;
-  
-  if (wasPlaying && srcChanged && cfTime > 0 && !isCrossfading[channel]) {
-    performCrossfade(channel, newSrc, targetVol, cfTime);
+  if (shouldCrossfade(channel, newSrc) && !audio[channel].ended) {
+    crossfadeFile(channel, newSrc, targetVol, crossfadeMs[channel]);
   } else {
-    audio[channel].src = newSrc;
-    audio[channel].volume = targetVol;
-    if (audioUnlocked) {
-      audio[channel].play().catch(err => console.error(`❌ Audio ${channel} play failed:`, err));
-    } else {
-      waitingForUnlock.push({ channel, type: "file" });
-    }
+    abortTransition(channel);
     currentTrackSrc[channel] = newSrc;
+    const el = audio[channel];
+    el.src = newSrc;
+    el.volume = targetVol;
+    if (audioUnlocked) el.play().catch(err => console.error(`❌ Audio ${channel} play failed:`, err));
+    else waitingForUnlock.push({ channel, type: "file" });
   }
 }
 
-function performCrossfade(channel, newSrc, targetVol, cfTime) {
-  if (isCrossfading[channel]) return;
+async function crossfadeFile(channel, newSrc, targetVol, cfTime) {
+  const gen = ++transitionGen[channel];
+  clearFadeTimers(channel);
   isCrossfading[channel] = true;
-  
-  const fadeSteps = 20;
-  const fadeDuration = cfTime / 2;
-  const stepDelay = fadeDuration / fadeSteps;
-  let step = 0;
-  
-  console.log(`🎚️ CROSSFADE on ${channel}: fade OUT (${cfTime/2}ms) → swap → fade IN (${cfTime/2}ms)`);
-  
-  // Phase 1: FADE OUT old track
-  const fadeOut = setInterval(() => {
-    step++;
-    const progress = step / fadeSteps;
-    const vol = Math.max(0, (1 - progress) * targetVol);
-    audio[channel].volume = vol;
-    
-    if (step >= fadeSteps) {
-      clearInterval(fadeOut);
-      
-      // Phase 2: GAP + LOAD NEW TRACK
-      setTimeout(() => {
-        audio[channel].src = newSrc;
-        audio[channel].currentTime = 0;
-        
-        if (audioUnlocked) {
-          audio[channel].play().catch(console.warn);
-        }
-        
-        // Phase 3: FADE IN new track
-        let fadeStep = 0;
-        const fadeIn = setInterval(() => {
-          fadeStep++;
-          const progress = fadeStep / fadeSteps;
-          const vol = Math.min(targetVol, progress * targetVol);
-          audio[channel].volume = vol;
-          
-          if (fadeStep >= fadeSteps) {
-            clearInterval(fadeIn);
-            isCrossfading[channel] = false;
-            currentTrackSrc[channel] = newSrc;
-            console.log(`✅ CROSSFADE COMPLETE on ${channel}`);
-          }
-        }, stepDelay);
-      }, 100);
-    }
-  }, stepDelay);
+  currentTrackSrc[channel] = newSrc;
+
+  const el = audio[channel];
+  const half = cfTime / 2;
+  const isAudible = !el.paused && !el.ended;
+
+  console.log(`🎚️ CROSSFADE on ${channel}: fade OUT (${isAudible ? half + 'ms' : 'SKIPPED (silent)'}) → swap → fade IN`);
+
+  if (isAudible && half > 0) await runFade(channel, el.volume, 0, half, v => el.volume = v);
+  if (transitionGen[channel] !== gen) return;
+
+  el.src = newSrc;
+  el.currentTime = 0;
+  el.volume = 0;
+  if (audioUnlocked) el.play().catch(console.warn);
+
+  if (half > 0) await runFade(channel, 0, targetVol, half, v => el.volume = v);
+  if (transitionGen[channel] !== gen) return;
+
+  isCrossfading[channel] = false;
+  console.log(`✅ CROSSFADE COMPLETE on ${channel}`);
 }
 
 function handleYouTube(channel, newSrc) {
@@ -473,104 +498,89 @@ function handleYouTube(channel, newSrc) {
     window.onYouTubeIframeAPIReady = () => handleYouTube(channel, newSrc);
     return;
   }
-  
+
   const targetVol = roomVol[channel] * localMaster;
-  const wasPlaying = !!currentTrackSrc[channel];
-  const srcChanged = currentTrackSrc[channel] !== newSrc;
-  const cfTime = crossfadeMs[channel];
-  
-  if (wasPlaying && srcChanged && cfTime > 0 && !isCrossfading[channel] && ytPlayers[channel]) {
-    performYouTubeCrossfade(channel, newSrc, targetVol, cfTime);
-    return;
+
+  if (ytPlayers[channel]) {
+    const playing = ytPlayers[channel].getPlayerState?.() === 1;
+    if (shouldCrossfade(channel, newSrc) && playing) {
+      crossfadeYouTube(channel, newSrc, targetVol, crossfadeMs[channel]);
+      return;
+    }
   }
-  
-  const onCreate = (player) => {
-    player.mute();
+
+  const startImmediate = (player) => {
+    abortTransition(channel);
     currentTrackSrc[channel] = newSrc;
-    applyVolumes();
-    
+    player.mute();
     if (audioUnlocked) {
       player.unMute();
       player.setVolume(targetVol * 100);
       player.playVideo();
-      console.log(`▶️ YouTube started on ${channel}`);
     } else {
       waitingForUnlock.push({ channel, type: "youtube" });
     }
   };
-  
+
   if (!ytPlayers[channel]) {
     ytPlayers[channel] = new YT.Player("yt" + channel, {
       videoId: newSrc,
       playerVars: { autoplay: 0, controls: 0, mute: 1 },
       events: {
-        onReady: e => onCreate(e.target),
+        onReady: e => startImmediate(e.target),
         onStateChange: e => { if (e.data === 0) socket.emit("trackEnded", channel); }
       }
     });
   } else {
-    currentTrackSrc[channel] = newSrc;
     ytPlayers[channel].loadVideoById(newSrc);
-    ytPlayers[channel].mute();
-    
-    if (audioUnlocked) {
-      ytPlayers[channel].unMute();
-      ytPlayers[channel].setVolume(targetVol * 100);
-      ytPlayers[channel].playVideo();
-      console.log(`▶️ YouTube restarted on ${channel}`);
-    } else {
-      waitingForUnlock.push({ channel, type: "youtube" });
-    }
+    startImmediate(ytPlayers[channel]);
   }
 }
 
-function performYouTubeCrossfade(channel, newSrc, targetVol, cfTime) {
-  if (isCrossfading[channel]) return;
+async function crossfadeYouTube(channel, newSrc, targetVol, cfTime) {
+  const gen = ++transitionGen[channel];
+  clearFadeTimers(channel);
   isCrossfading[channel] = true;
+  currentTrackSrc[channel] = newSrc;
+
   const player = ytPlayers[channel];
-  
-  const fadeSteps = 20;
-  const fadeDuration = cfTime / 2;
-  const stepDelay = fadeDuration / fadeSteps;
-  let step = 0;
-  
-  console.log(`🎚️ YOUTUBE CROSSFADE on ${channel}: fade OUT (${cfTime/2}ms) → swap → fade IN (${cfTime/2}ms)`);
-  
-  // Phase 1: FADE OUT old video
-  const fadeOut = setInterval(() => {
-    step++;
-    const progress = step / fadeSteps;
-    const vol = Math.max(0, (1 - progress) * targetVol * 100);
-    player.setVolume(vol);
-    
-    if (step >= fadeSteps) {
-      clearInterval(fadeOut);
-      
-      // Phase 2: GAP + LOAD NEW VIDEO
-      setTimeout(() => {
-        player.loadVideoById(newSrc);
-        player.mute();
-        
-        // Phase 3: FADE IN new video
-        let fadeStep = 0;
-        const fadeIn = setInterval(() => {
-          fadeStep++;
-          const progress = fadeStep / fadeSteps;
-          const vol = Math.min(targetVol * 100, progress * targetVol * 100);
-          player.setVolume(vol);
-          
-          if (fadeStep >= fadeSteps) {
-            clearInterval(fadeIn);
-            player.unMute();
-            player.playVideo();
-            isCrossfading[channel] = false;
-            currentTrackSrc[channel] = newSrc;
-            console.log(`✅ YOUTUBE CROSSFADE COMPLETE on ${channel}`);
-          }
-        }, stepDelay);
-      }, 100);
-    }
-  }, stepDelay);
+  const half = cfTime / 2;
+  const tv100 = targetVol * 100;
+
+  console.log(`🎚️ YOUTUBE CROSSFADE on ${channel}: fade OUT (${half}ms) → swap → fade IN (${half}ms)`);
+
+  const startVol = player.getVolume?.() ?? tv100;
+  if (half > 0) await runFade(channel, startVol, 0, half, v => player.setVolume(v));
+  if (transitionGen[channel] !== gen) return;
+
+  player.loadVideoById(newSrc);
+  player.mute();
+  player.playVideo();
+  player.setVolume(0);
+
+  if (half > 0) await runFade(channel, 0, tv100, half, v => player.setVolume(v));
+  if (transitionGen[channel] !== gen) return;
+
+  player.unMute();
+  isCrossfading[channel] = false;
+  console.log(`✅ YOUTUBE CROSSFADE COMPLETE on ${channel}`);
+}
+
+function stopChannel(channel) {
+  abortTransition(channel);
+  audio[channel].pause();
+  if (ytPlayers[channel]?.stopVideo) ytPlayers[channel].stopVideo();
+  channelType[channel] = null;
+  document.getElementById("nowTitle" + channel).textContent = "NONE";
+  document.getElementById("play" + channel).textContent = "▶";
+  currentTrackSrc[channel] = null;
+}
+
+function updateRepeatButtons(repA, repB) {
+  const btnA = document.getElementById("repeatA");
+  const btnB = document.getElementById("repeatB");
+  if (btnA) repA ? btnA.classList.add("repeat-active") : btnA.classList.remove("repeat-active");
+  if (btnB) repB ? btnB.classList.add("repeat-active") : btnB.classList.remove("repeat-active");
 }
 
 function paint(ch, id) {
