@@ -176,7 +176,13 @@
         <button class="control-btn" onclick="dj('next',{channel:'A'})">⏭</button>
         <button class="control-btn" onclick="dj('stop',{channel:'A'})" style="background:var(--accent-red);color:var(--bg-deep)">⏹</button>
       </div>
-      <div class="row"><input id="urlA" placeholder="URL"><input id="titleA" placeholder="NAME" style="flex:0.6"><button class="accent" onclick="queue('A')">LOAD</button></div>
+      <div class="row">
+        <input id="urlA" placeholder="URL">
+        <input id="titleA" placeholder="NAME" style="flex:0.6">
+        <button class="accent" onclick="queue('A')">LOAD</button>
+        <input type="file" id="fileInputA" accept=".mp3,.ogg,.wav,.m4a" style="display:none" onchange="uploadFile('A', this)">
+        <button class="control-btn" onclick="document.getElementById('fileInputA').click()" title="UPLOAD LOCAL FILE">📁</button>
+      </div>
       <div style="font-size:0.9rem;color:var(--text-dim)">PLAYLIST [<span id="countA">0</span>]</div>
       <ul id="listA"></ul>
     </div>
@@ -196,7 +202,13 @@
         <button class="control-btn" onclick="dj('next',{channel:'B'})">⏭</button>
         <button class="control-btn" onclick="dj('stop',{channel:'B'})" style="background:var(--accent-red);color:var(--bg-deep)">⏹</button>
       </div>
-      <div class="row"><input id="urlB" placeholder="URL"><input id="titleB" placeholder="NAME" style="flex:0.6"><button class="accent" onclick="queue('B')">LOAD</button></div>
+      <div class="row">
+        <input id="urlB" placeholder="URL">
+        <input id="titleB" placeholder="NAME" style="flex:0.6">
+        <button class="accent" onclick="queue('B')">LOAD</button>
+        <input type="file" id="fileInputB" accept=".mp3,.ogg,.wav,.m4a" style="display:none" onchange="uploadFile('B', this)">
+        <button class="control-btn" onclick="document.getElementById('fileInputB').click()" title="UPLOAD LOCAL FILE">📁</button>
+      </div>
       <div style="font-size:0.9rem;color:var(--text-dim)">PLAYLIST [<span id="countB">0</span>]</div>
       <ul id="listB"></ul>
     </div>
@@ -393,11 +405,59 @@ function queue(ch) {
   const url = document.getElementById("url" + ch).value.trim();
   const title = document.getElementById("title" + ch).value.trim() || "UNNAMED";
   if (!url) return alert("Paste a link first.");
+  
+  // ✅ Reject file:// URLs
+  if (url.startsWith("file:") || url.startsWith("/")) {
+    return alert("Local file paths don't work! Use the 📁 UPLOAD button to load files from your computer.");
+  }
+  
   const m = url.match(/(?:youtu\.be\/|[?&]v=|shorts\/|embed\/)([\w-]{11})/);
   let track = m ? { type: "youtube", src: m[1], title } : { type: "file", src: url, title };
   dj("queue", { channel: ch, ...track });
   document.getElementById("url" + ch).value = "";
   document.getElementById("title" + ch).value = "";
+}
+
+async function uploadFile(ch, input) {
+  const file = input.files[0];
+  input.value = "";
+  if (!file) return;
+  if (!djToken) return alert("Only the operator can upload files!");
+  if (!socket.connected) { alert("Connection lost. Refresh page."); return; }
+  
+  const sizeMB = (file.size / 1024 / 1024).toFixed(1);
+  if (file.size > 50 * 1024 * 1024) return alert("File too large (max 50 MB)");
+  
+  console.log(`📤 Uploading ${file.name} (${sizeMB} MB) to channel ${ch}...`);
+  document.getElementById("connectionStatus").textContent = `UPLOADING ${file.name}...`;
+  
+  const formData = new FormData();
+  formData.append("audio", file);
+  
+  try {
+    const res = await fetch("/api/upload", {
+      method: "POST",
+      headers: { "x-dj-token": djToken },
+      body: formData
+    });
+    
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || `Upload failed (${res.status})`);
+    }
+    
+    const data = await res.json();
+    console.log(`✅ Uploaded: ${data.url}`);
+    
+    const title = file.name.replace(/\.[^.]+$/, "").toUpperCase() || "UPLOADED";
+    dj("queue", { channel: ch, type: "file", src: data.url, title });
+    
+    document.getElementById("connectionStatus").textContent = "STATUS: ONLINE";
+  } catch (err) {
+    console.error("❌ Upload failed:", err);
+    alert("Upload failed: " + err.message);
+    document.getElementById("connectionStatus").textContent = "STATUS: ONLINE";
+  }
 }
 
 document.getElementById("volA").oninput = e => dj("volume", { channel: "A", volume: +e.target.value });
