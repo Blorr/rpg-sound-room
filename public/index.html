@@ -72,6 +72,9 @@
   .system-status { text-align: center; color: var(--text-dim); font-size: 0.85rem; margin-top: 2rem; }
   label { color: var(--text-dim); font-size: 1rem; }
   
+  /* Footer responsive */
+  @media(max-width: 700px) { .cols-footer { grid-template-columns: 1fr !important; } }
+  
   .repeat-active {
     color: var(--accent-orange) !important;
     background: rgba(255, 170, 85, 0.3) !important;
@@ -221,6 +224,32 @@
 <div id="ytB" style="width:1px;height:1px;overflow:hidden"></div>
 
 <div class="system-status">SYSTEM VERSION 1.0 // AUDIO DISTRIBUTION NODE</div>
+
+<!-- USAGE GUIDE FOOTER -->
+<div class="footer-info" style="margin-top: 3rem; padding: 1.5rem; border: 2px solid var(--border); background: rgba(42, 42, 50, 0.6); font-size: 0.9rem;">
+  <h3 style="color: var(--accent-red); margin: 0 0 1rem; font-size: 1.2rem;">📋 Quick Start Guide</h3>
+  <div class="cols-footer" style="display: grid; grid-template-columns: 1fr 1fr; gap: 2rem; margin-bottom: 1.5rem;">
+    <div>
+      <h4 style="color: var(--accent-orange); margin: 0 0 0.5rem;">How to Use</h4>
+      <ul style="color: var(--text-dim); margin: 0; padding-left: 1.2rem; line-height: 1.8;">
+        <li>Create room → Upload/paste tracks → Share link</li>
+        <li>Wait for all players before starting</li>
+        <li>Operators control playback; listeners follow</li>
+      </ul>
+    </div>
+    <div>
+      <h4 style="color: var(--accent-orange); margin: 0 0 0.5rem;">YouTube & Legal</h4>
+      <ul style="color: var(--text-dim); margin: 0; padding-left: 1.2rem; line-height: 1.8;">
+        <li>Uses official YouTube IFrame API</li>
+        <li>Personal/non-commercial use only</li>
+        <li>No re-streaming or redistribution</li>
+      </ul>
+    </div>
+  </div>
+  <p style="color: var(--text-dim); margin: 0; font-size: 0.85rem; line-height: 1.6;">
+    <strong>Note:</strong> Each listener loads videos independently — slight desync is normal. Local file uploads expire when server restarts. Keep tabs open and visible for best results.
+  </p>
+</div>
 
 <script src="/socket.io/socket.io.js"></script>
 <script>
@@ -406,7 +435,7 @@ function queue(ch) {
   const title = document.getElementById("title" + ch).value.trim() || "UNNAMED";
   if (!url) return alert("Paste a link first.");
   
-  // ✅ Reject file:// URLs
+  // Reject file:// URLs
   if (url.startsWith("file:") || url.startsWith("/")) {
     return alert("Local file paths don't work! Use the 📁 UPLOAD button to load files from your computer.");
   }
