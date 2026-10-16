@@ -6,7 +6,7 @@
 <meta name="referrer" content="origin">
 <style>
   @import url('https://fonts.googleapis.com/css2?family=VT323&display=swap');
-  
+
   :root {
     --bg-deep: #1a1a1e;
     --bg-dark: #2a2a32;
@@ -19,9 +19,9 @@
     --border: #555560;
     --border-light: #777780;
   }
-  
+
   * { box-sizing: border-box; }
-  
+
   body {
     font-family: 'VT323', monospace;
     background: var(--bg-deep);
@@ -31,7 +31,7 @@
     padding: 2rem;
     min-height: 100vh;
   }
-  
+
   h1 { font-size: 2.8rem; text-align: center; margin: 0 0 2rem; color: var(--accent-red); text-shadow: 0 0 5px rgba(255, 68, 68, 0.5); letter-spacing: 3px; border-bottom: 3px solid var(--accent-red); padding-bottom: 1rem; }
   h1::after { content: 'AUDIO DISTRIBUTION NODE'; display: block; font-size: 1rem; color: var(--text-dim); letter-spacing: 2px; margin-top: 0.5rem; font-weight: normal; }
   .card { background: var(--bg-panel); border: 2px solid var(--border); padding: 1.5rem; margin: 1.5rem 0; position: relative; }
@@ -49,8 +49,8 @@
   .channel-card.chA { border-top: 4px solid var(--accent-orange); }
   .channel-card.chB { border-top: 4px solid var(--accent-red); }
   .channel-title { font-size: 1.4rem; margin-bottom: 1rem; }
-  .channel-chA .channel-title { color: var(--accent-orange); }
-  .channel-chB .channel-title { color: var(--accent-red); }
+  .chA .channel-title { color: var(--accent-orange); }
+  .chB .channel-title { color: var(--accent-red); }
   ul { list-style: none; padding: 0; margin: 0.5rem 0; border-top: 2px solid var(--border); max-height: 200px; overflow-y: auto; background: var(--bg-dark); }
   li { padding: 0.5rem; border-bottom: 1px solid var(--border); cursor: pointer; display: flex; justify-content: space-between; align-items: center; font-size: 1rem; color: var(--text-bright); }
   li:hover { background: rgba(255, 68, 68, 0.2); }
@@ -71,17 +71,17 @@
   input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 18px; height: 18px; background: var(--accent-red); }
   .system-status { text-align: center; color: var(--text-dim); font-size: 0.85rem; margin-top: 2rem; }
   label { color: var(--text-dim); font-size: 1rem; }
-  
+
   /* Footer responsive */
   @media(max-width: 700px) { .cols-footer { grid-template-columns: 1fr !important; } }
-  
+
   .repeat-active {
     color: var(--accent-orange) !important;
     background: rgba(255, 170, 85, 0.3) !important;
     border-color: var(--accent-orange) !important;
     box-shadow: 0 0 10px rgba(255, 170, 85, 0.5);
   }
-  
+
   #audioUnlock {
     position: fixed;
     top: 0;
@@ -95,27 +95,27 @@
     align-items: center;
     z-index: 1000;
   }
-  
+
   #audioUnlock h2 {
     color: var(--accent-red);
     font-size: 2.5rem;
     margin-bottom: 1rem;
     text-shadow: 0 0 10px rgba(255, 68, 68, 0.5);
   }
-  
+
   #audioUnlock p {
     color: var(--text-dim);
     font-size: 1.2rem;
     margin-bottom: 2rem;
   }
-  
+
   #audioUnlock button {
     font-size: 1.5rem;
     padding: 1rem 3rem;
     letter-spacing: 2px;
     animation: pulse 2s infinite;
   }
-  
+
   @keyframes pulse {
     0%, 100% { box-shadow: 0 0 5px var(--accent-red); }
     50% { box-shadow: 0 0 20px var(--accent-red); }
@@ -274,6 +274,7 @@ let reconnectAttempts = 0;
 let transitionGen = { A: 0, B: 0 };
 let fadeTimers = { A: [], B: [] };
 let pendingRejoin = false;
+let pendingRoom = null;
 
 document.addEventListener("visibilitychange", () => {
   if (!document.hidden) {
@@ -335,18 +336,18 @@ window.addEventListener("DOMContentLoaded", () => {
 function unlockAudio() {
   if (audioUnlocked) return;
   audioUnlocked = true;
-  
+
   const overlay = document.getElementById("audioUnlock");
   if (overlay) {
     overlay.style.display = "none";
     overlay.classList.add("hidden");
   }
-  
+
   if ("mediaSession" in navigator) {
     navigator.mediaSession.setActionHandler("play", () => {});
     navigator.mediaSession.setActionHandler("pause", () => {});
   }
-  
+
   waitingForUnlock.forEach(item => {
     if (item.type === "file") {
       audio[item.channel].play().catch(console.warn);
@@ -362,21 +363,27 @@ function unlockAudio() {
 async function createRoom() {
   const name = document.getElementById("newRoomName").value.trim();
   const res = await fetch("/api/rooms", { method: "POST", headers: {"Content-Type":"application/json"}, body: JSON.stringify({ roomId: name }) });
-  if (!res.ok) return alert("Could not create room.");
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    return alert(err.error || "Could not create room.");
+  }
   const data = await res.json();
+  // Store token using the EXACT ID the server returned (already lowercase + sanitized)
   localStorage.setItem("dj-" + data.roomId, data.djToken);
   document.getElementById("shareLink").textContent = location.origin + "/?room=" + data.roomId;
   document.getElementById("djSetup").classList.remove("hidden");
   document.getElementById("landing").classList.add("hidden");
   pendingRoom = data.roomId;
 }
-let pendingRoom = null;
+
 function enterRoom() { location.href = "/?room=" + (pendingRoom || roomId); }
 
 const urlRoom = params.get("room");
 if (urlRoom) {
-  djToken = localStorage.getItem("dj-" + urlRoom) || null;
-  roomId = urlRoom.replace(/[^a-z0-9-]/g, "");
+  // CASE FIX: normalize room name from URL so "Dungeon" == "dungeon"
+  const normalizedRoom = urlRoom.trim().replace(/[^a-zA-Z0-9-]/g, "").toLowerCase();
+  djToken = localStorage.getItem("dj-" + normalizedRoom) || null;
+  roomId = normalizedRoom;
   socket.emit("join", roomId);
 
   socket.on("state", room => {
@@ -434,12 +441,12 @@ function queue(ch) {
   const url = document.getElementById("url" + ch).value.trim();
   const title = document.getElementById("title" + ch).value.trim() || "UNNAMED";
   if (!url) return alert("Paste a link first.");
-  
+
   // Reject file:// URLs
   if (url.startsWith("file:") || url.startsWith("/")) {
     return alert("Local file paths don't work! Use the 📁 UPLOAD button to load files from your computer.");
   }
-  
+
   const m = url.match(/(?:youtu\.be\/|[?&]v=|shorts\/|embed\/)([\w-]{11})/);
   let track = m ? { type: "youtube", src: m[1], title } : { type: "file", src: url, title };
   dj("queue", { channel: ch, ...track });
@@ -453,34 +460,34 @@ async function uploadFile(ch, input) {
   if (!file) return;
   if (!djToken) return alert("Only the operator can upload files!");
   if (!socket.connected) { alert("Connection lost. Refresh page."); return; }
-  
+
   const sizeMB = (file.size / 1024 / 1024).toFixed(1);
   if (file.size > 50 * 1024 * 1024) return alert("File too large (max 50 MB)");
-  
+
   console.log(`📤 Uploading ${file.name} (${sizeMB} MB) to channel ${ch}...`);
   document.getElementById("connectionStatus").textContent = `UPLOADING ${file.name}...`;
-  
+
   const formData = new FormData();
   formData.append("audio", file);
-  
+
   try {
     const res = await fetch("/api/upload", {
       method: "POST",
       headers: { "x-dj-token": djToken },
       body: formData
     });
-    
+
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
       throw new Error(err.error || `Upload failed (${res.status})`);
     }
-    
+
     const data = await res.json();
     console.log(`✅ Uploaded: ${data.url}`);
-    
+
     const title = file.name.replace(/\.[^.]+$/, "").toUpperCase() || "UPLOADED";
     dj("queue", { channel: ch, type: "file", src: data.url, title });
-    
+
     document.getElementById("connectionStatus").textContent = "STATUS: ONLINE";
   } catch (err) {
     console.error("❌ Upload failed:", err);

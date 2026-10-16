@@ -33,12 +33,12 @@ const upload = multer({
   }
 });
 
-const blankChannel = () => ({ 
-  tracks: [], 
-  currentIndex: -1, 
-  playing: false, 
-  position: 0, 
-  updatedAt: Date.now(), 
+const blankChannel = () => ({
+  tracks: [],
+  currentIndex: -1,
+  playing: false,
+  position: 0,
+  updatedAt: Date.now(),
   volume: 100,
   repeat: false
 });
@@ -46,21 +46,26 @@ const blankChannel = () => ({
 const rooms = new Map();
 const roomActivity = new Map();
 
+// Normalizes any room name to safe lowercase ID
+function normalizeRoomId(raw) {
+  return (raw || "").trim().replace(/[^a-zA-Z0-9-]/g, "").toLowerCase().slice(0, 32);
+}
+
 app.post("/api/rooms", (req, res) => {
-  const wanted = (req.body.roomId || "").trim().replace(/[^a-z0-9-]/gi, "").slice(0, 32);
+  const wanted = normalizeRoomId(req.body.roomId);
   const id = wanted || "room-" + crypto.randomBytes(3).toString("hex");
-  
+
   if (rooms.has(id)) return res.status(409).json({ error: "That room name is taken." });
-  
+
   const djToken = crypto.randomBytes(24).toString("hex");
-  rooms.set(id, { 
-    djToken, 
-    channelA: blankChannel(), 
-    channelB: blankChannel(), 
-    crossfade: 3 
+  rooms.set(id, {
+    djToken,
+    channelA: blankChannel(),
+    channelB: blankChannel(),
+    crossfade: 3
   });
   roomActivity.set(id, Date.now());
-  
+
   console.log(`📦 Created room: ${id}`);
   res.json({ roomId: id, djToken });
 });
@@ -68,14 +73,14 @@ app.post("/api/rooms", (req, res) => {
 // === FILE UPLOAD ENDPOINT (DJ only) ===
 app.post("/api/upload", (req, res) => {
   const token = req.headers["x-dj-token"];
-  
+
   upload.single("audio")(req, res, (err) => {
     if (err) {
       console.error("❌ Upload error:", err.message);
       return res.status(400).json({ error: err.message });
     }
     if (!req.file) return res.status(400).json({ error: "No file received" });
-    
+
     let validRoom = false;
     for (const [, room] of rooms) {
       if (room.djToken === token) { validRoom = true; break; }
@@ -84,7 +89,7 @@ app.post("/api/upload", (req, res) => {
       fs.unlinkSync(req.file.path);
       return res.status(403).json({ error: "Invalid DJ token" });
     }
-    
+
     const fileUrl = `${req.protocol}://${req.get("host")}/uploads/${req.file.filename}`;
     console.log(`📤 Uploaded: ${req.file.originalname} → ${req.file.filename}`);
     res.json({ url: fileUrl, filename: req.file.originalname, size: req.file.size });
@@ -99,11 +104,11 @@ app.get("/health", (req, res) => {
 
 app.get("/proxy/audio", async (req, res) => {
   const url = req.query.url;
-  
+
   if (!url || !/^https?:\/\/.*\.(mp3|ogg|wav|m4a)(\?|$)/i.test(url)) {
     return res.status(400).send("Invalid audio URL");
   }
-  
+
   try {
     const response = await axios({
       method: "GET",
@@ -111,7 +116,7 @@ app.get("/proxy/audio", async (req, res) => {
       responseType: "stream",
       timeout: 10000
     });
-    
+
     res.set("Content-Type", response.headers["content-type"]);
     res.set("Access-Control-Allow-Origin", "*");
     response.data.pipe(res);
@@ -125,16 +130,17 @@ io.on("connection", (socket) => {
   let roomId = null;
 
   socket.on("join", (id) => {
-    if (!rooms.has(id)) {
-      console.log(`❌ Room ${id} not found!`);
+    const normalizedId = typeof id === "string" ? id.toLowerCase() : null;
+    if (!normalizedId || !rooms.has(normalizedId)) {
+      console.log(`❌ Room "${normalizedId}" not found!`);
       return socket.emit("roomNotFound");
     }
-    roomId = id;
+    roomId = normalizedId;
     socket.join(roomId);
     const room = rooms.get(roomId);
-    roomActivity.set(id, Date.now());
+    roomActivity.set(roomId, Date.now());
     socket.emit("state", room);
-    
+
     ["A", "B"].forEach(chId => {
       const ch = chId === "A" ? room.channelA : room.channelB;
       if (ch.currentIndex >= 0 && ch.tracks[ch.currentIndex]) {
@@ -146,7 +152,7 @@ io.on("connection", (socket) => {
         });
       }
     });
-    
+
     console.log(`🔗 Client joined room: ${roomId} (total: ${io.sockets.adapter.rooms.get(roomId)?.size})`);
   });
 
@@ -166,32 +172,32 @@ io.on("connection", (socket) => {
   socket.on("trackEnded", (channel) => {
     const room = rooms.get(roomId);
     if (!room) return;
-    
+
     const ch = channel === "A" ? room.channelA : room.channelB;
     const now = Date.now();
-    
+
     if (now - ch.updatedAt < 3000 || ch.currentIndex < 0) return;
-    
+
     if (ch.repeat) {
       ch.playing = true;
       ch.position = 0;
       ch.updatedAt = now;
-      io.to(roomId).emit("nowPlaying", { 
-        channel, 
-        ...ch.tracks[ch.currentIndex], 
-        playing: true, 
-        volume: ch.volume 
+      io.to(roomId).emit("nowPlaying", {
+        channel,
+        ...ch.tracks[ch.currentIndex],
+        playing: true,
+        volume: ch.volume
       });
     } else if (ch.currentIndex < ch.tracks.length - 1) {
       ch.currentIndex++;
       ch.playing = true;
       ch.position = 0;
       ch.updatedAt = now;
-      io.to(roomId).emit("nowPlaying", { 
-        channel, 
-        ...ch.tracks[ch.currentIndex], 
-        playing: true, 
-        volume: ch.volume 
+      io.to(roomId).emit("nowPlaying", {
+        channel,
+        ...ch.tracks[ch.currentIndex],
+        playing: true,
+        volume: ch.volume
       });
     }
   });
@@ -199,15 +205,15 @@ io.on("connection", (socket) => {
   socket.on("sync", ({ token }) => {
     const room = rooms.get(roomId);
     if (!room || token !== room.djToken) return;
-    
+
     ["A", "B"].forEach(chId => {
       const ch = chId === "A" ? room.channelA : room.channelB;
       if (ch.currentIndex >= 0 && ch.tracks[ch.currentIndex]) {
-        io.to(roomId).emit("nowPlaying", { 
-          channel: chId, 
-          ...ch.tracks[ch.currentIndex], 
-          playing: ch.playing, 
-          volume: ch.volume 
+        io.to(roomId).emit("nowPlaying", {
+          channel: chId,
+          ...ch.tracks[ch.currentIndex],
+          playing: ch.playing,
+          volume: ch.volume
         });
       }
     });
@@ -216,9 +222,9 @@ io.on("connection", (socket) => {
   socket.on("disconnect", (reason) => {
     console.log(`❌ Client disconnected from ${roomId}: ${reason}`);
     if (!roomId) return;
-    
+
     const stillHere = io.sockets.adapter.rooms.get(roomId)?.size ?? 0;
-    
+
     if (stillHere === 0) {
       setTimeout(() => {
         const count = io.sockets.adapter.rooms.get(roomId)?.size ?? 0;
@@ -238,6 +244,7 @@ setInterval(() => {
   }
 }, 60000);
 
+// Cleanup uploaded files older than 6 hours
 setInterval(() => {
   try {
     const cutoff = Date.now() - 6 * 60 * 60 * 1000;
@@ -251,7 +258,7 @@ setInterval(() => {
 function handleAction(action, p, room, roomId) {
   if (!p || !p.channel) return;
   const ch = p.channel === "A" ? room.channelA : room.channelB;
-  
+
   switch (action) {
     case "queue":
       ch.tracks.push({ type: p.type, src: p.src, title: p.title });
@@ -323,7 +330,7 @@ function handleAction(action, p, room, roomId) {
       io.to(roomId).emit("crossfadeUpdate", p.seconds);
       break;
   }
-  
+
   io.to(roomId).emit("playlistUpdate", { channelA: room.channelA, channelB: room.channelB });
 }
 
