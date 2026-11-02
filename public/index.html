@@ -5,81 +5,423 @@
 <title>RPG Sound Room - STATION</title>
 <meta name="referrer" content="origin">
 <style>
-  @import url('https://fonts.googleapis.com/css2?family=VT323&display=swap');
-
   :root {
-    --bg-deep: #1a1a1e;
-    --bg-dark: #2a2a32;
-    --bg-panel: #32323a;
-    --accent-red: #ff4444;
-    --accent-orange: #ffaa55;
-    --text-main: #ffffff;
-    --text-bright: #ffd0d0;
-    --text-dim: #b0b0b0;
-    --border: #555560;
-    --border-light: #777780;
+    --wood-dark: #2a1810;
+    --wood-mid: #5a3820;
+    --wood-light: #8a5c33;
+    --gold: #d6ab60;
+    --gold-bright: #f2d79a;
+    --parch: #eadcbb;
+    --parch-dark: #dcc79c;
+    --ink: #432c15;
+    --emerald: #3fbf6f;
+    --amber: #e0a92a;
+    --crimson: #c94b3a;
   }
 
   * { box-sizing: border-box; }
 
   body {
-    font-family: 'VT323', monospace;
-    background: var(--bg-deep);
-    color: var(--text-main);
+    font-family: 'Palatino Linotype', 'Book Antiqua', Palatino, Georgia, 'Times New Roman', serif;
+    background-color: #3a2314;
+    background-image:
+      radial-gradient(ellipse at 50% -12%, rgba(255,196,110,.20), transparent 62%),
+      repeating-linear-gradient(90deg,
+        rgba(0,0,0,.40) 0 2px,
+        rgba(124,82,48,.50) 2px 134px,
+        rgba(86,55,31,.62) 135px 140px),
+      repeating-linear-gradient(91deg,
+        rgba(255,255,255,.035) 0 1px,
+        rgba(0,0,0,.055) 1px 4px,
+        rgba(255,255,255,.018) 4px 7px),
+      linear-gradient(180deg,#4a2d19,#2a1810);
+    background-attachment: fixed;
+    color: var(--gold-bright);
     max-width: 1100px;
     margin: 0 auto;
     padding: 2rem;
     min-height: 100vh;
   }
 
-  h1 { font-size: 2.8rem; text-align: center; margin: 0 0 2rem; color: var(--accent-red); text-shadow: 0 0 5px rgba(255, 68, 68, 0.5); letter-spacing: 3px; border-bottom: 3px solid var(--accent-red); padding-bottom: 1rem; }
-  h1::after { content: 'AUDIO DISTRIBUTION NODE'; display: block; font-size: 1rem; color: var(--text-dim); letter-spacing: 2px; margin-top: 0.5rem; font-weight: normal; }
-  .card { background: var(--bg-panel); border: 2px solid var(--border); padding: 1.5rem; margin: 1.5rem 0; position: relative; }
-  .card::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px; background: linear-gradient(90deg, transparent, var(--accent-red), transparent); }
-  h2 { color: var(--accent-red); font-size: 1.5rem; margin: 0 0 1rem; }
+  h1 {
+    font-size: 2.8rem;
+    text-align: center;
+    margin: 0 0 2rem;
+    color: var(--gold-bright);
+    text-shadow:
+      0 1px 0 rgba(43,24,12,.95),
+      0 -1px 0 rgba(255,244,214,.35),
+      0 4px 10px rgba(0,0,0,.65);
+    letter-spacing: 3px;
+    border-bottom: 4px solid var(--gold);
+    padding-bottom: 1rem;
+  }
+
+  h1::after {
+    content: 'AUDIO DISTRIBUTION NODE';
+    display: block;
+    font-size: 1rem;
+    color: rgba(232,205,158,.78);
+    letter-spacing: 2px;
+    margin-top: 0.5rem;
+    font-weight: normal;
+    font-style: italic;
+  }
+
+  /* ── D20 ICOSAHEDRON MARK ─────────────────────────────── */
+  .d20 {
+    width: 0.95em;
+    height: 0.95em;
+    vertical-align: -0.09em;
+    margin-right: 0.12em;
+    overflow: visible;
+    filter:
+      drop-shadow(0 3px 6px rgba(0,0,0,.65))
+      drop-shadow(0 0 7px rgba(214,171,96,.45));
+  }
+  .d20 .shell {
+    fill: rgba(138,92,51,.28);
+    stroke: currentColor;
+    stroke-width: 5;
+    stroke-linejoin: round;
+  }
+  .d20 .wire {
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 5;
+    stroke-linejoin: round;
+    stroke-linecap: round;
+  }
+  .d20 .face {
+    fill: rgba(246,224,176,.30);
+    stroke: currentColor;
+    stroke-width: 5;
+    stroke-linejoin: round;
+  }
+  .d20 .num {
+    fill: currentColor;
+    font-family: inherit;
+    font-size: 18px;
+    font-weight: 700;
+    letter-spacing: 0;
+  }
+
+  .panel {
+    position: relative;
+    border-radius: 16px;
+    border: 4px solid #33200f;
+    padding: 24px;
+    margin: 22px 0;
+    background-color: #5a3820;
+    background-image:
+      repeating-linear-gradient(88deg,
+        rgba(0,0,0,.10) 0 1px,
+        rgba(255,226,178,.030) 1px 3px,
+        rgba(0,0,0,.065) 3px 6px),
+      linear-gradient(180deg,#7d5231,#5c3a20 56%,#4a2d19);
+    box-shadow:
+      inset 0 0 0 2px rgba(169,116,63,.85),
+      inset 0 0 26px rgba(0,0,0,.45),
+      0 14px 30px rgba(0,0,0,.55);
+  }
+
+  .panel::before {
+    content: "";
+    position: absolute; inset: 7px;
+    border: 1px dashed rgba(230,192,120,.30);
+    border-radius: 11px;
+    pointer-events: none;
+  }
+
+  .panel > * { position: relative; z-index: 1; }
+
+  h2 {
+    color: var(--gold);
+    font-size: 1.5rem;
+    margin: 0 0 1rem;
+    text-shadow: 0 1px 0 rgba(43,24,12,.9), 0 3px 7px rgba(0,0,0,.6);
+    letter-spacing: 0.08em;
+  }
+
   .row { display: flex; gap: 0.5rem; margin: 0.8rem 0; align-items: center; flex-wrap: wrap; }
-  input, button { padding: 0.6rem 1rem; border: 2px solid var(--border-light); font-size: 1rem; font-family: 'VT323', monospace; background: var(--bg-dark); color: var(--text-bright); outline: none; }
-  input:focus { border-color: var(--accent-red); }
-  button { background: var(--bg-dark); color: var(--accent-red); cursor: pointer; text-transform: uppercase; transition: all 0.2s; }
-  button:hover { background: var(--accent-red); color: var(--bg-deep); }
-  button.accent { background: var(--accent-red); color: var(--bg-deep); }
+
+  input, button {
+    padding: 13px 18px;
+    border: 2px solid #8a6a3f;
+    font-size: 1rem;
+    font-family: inherit;
+    background-color: var(--parch);
+    background-image: linear-gradient(180deg,#f1e5c8,#dcc79c);
+    color: var(--ink);
+    outline: none;
+    border-radius: 9px;
+    box-shadow:
+      inset 0 3px 8px rgba(66,42,20,.35),
+      0 5px 12px rgba(0,0,0,.5);
+  }
+
+  input::placeholder { color: rgba(67,44,21,.55); font-style: italic; }
+
+  input:focus {
+    border-color: var(--gold);
+    box-shadow:
+      inset 0 3px 8px rgba(66,42,20,.35),
+      0 0 0 3px rgba(214,171,96,.35);
+  }
+
+  button {
+    cursor: pointer;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    color: #ffeecb;
+    text-shadow: 0 1px 2px rgba(0,0,0,.65);
+    background-color: var(--wood-light);
+    background-image: linear-gradient(180deg,#94643a,#5c3a20);
+    border-radius: 9px;
+    transition: transform .15s, box-shadow .15s, filter .15s;
+  }
+
+  button:hover:not(:disabled) {
+    transform: translateY(-2px);
+    filter: brightness(1.1);
+    box-shadow:
+      inset 0 1px 0 rgba(255,224,175,.45),
+      inset 0 -4px 8px rgba(0,0,0,.42),
+      0 9px 18px rgba(0,0,0,.55);
+  }
+
+  button:active:not(:disabled) { transform: translateY(0); }
+  button:disabled { opacity: .45; cursor: not-allowed; }
+
+  button.accent {
+    background-image: linear-gradient(180deg,#d6ab60,#8a6a3f);
+    color: #fff6ef;
+  }
+
+  button.accent:hover:not(:disabled) {
+    box-shadow:
+      inset 0 1px 0 rgba(255,224,175,.5),
+      inset 0 -4px 8px rgba(0,0,0,.5),
+      0 0 0 3px rgba(214,171,96,.55),
+      0 0 25px rgba(214,171,96,.6),
+      0 9px 18px rgba(0,0,0,.6);
+  }
+
   .cols { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; }
-  @media(max-width: 700px) { .cols { grid-template-columns: 1fr; } }
-  .channel-card { border: 2px solid var(--border); padding: 1.2rem; background: var(--bg-panel); }
-  .channel-card.chA { border-top: 4px solid var(--accent-orange); }
-  .channel-card.chB { border-top: 4px solid var(--accent-red); }
-  .channel-title { font-size: 1.4rem; margin-bottom: 1rem; }
-  .chA .channel-title { color: var(--accent-orange); }
-  .chB .channel-title { color: var(--accent-red); }
-  ul { list-style: none; padding: 0; margin: 0.5rem 0; border-top: 2px solid var(--border); max-height: 200px; overflow-y: auto; background: var(--bg-dark); }
-  li { padding: 0.5rem; border-bottom: 1px solid var(--border); cursor: pointer; display: flex; justify-content: space-between; align-items: center; font-size: 1rem; color: var(--text-bright); }
-  li:hover { background: rgba(255, 68, 68, 0.2); }
-  li.active { background: rgba(255, 68, 68, 0.3); border-left: 4px solid var(--accent-red); }
-  li span.title { flex: 1; overflow: hidden; text-overflow: ellipsis; }
-  li button.remove { background: transparent; border: 2px solid var(--accent-red); color: var(--accent-red); padding: 0.2rem 0.6rem; }
-  li button.remove:hover { background: var(--accent-red); color: var(--bg-deep); }
-  .muted { color: var(--text-dim); font-size: 1rem; }
+  @media(max-width: 980px) { .cols { grid-template-columns: 1fr; } }
+
+  .channel-card {
+    border: 4px solid #33200f;
+    padding: 1.2rem;
+    background-color: #5a3820;
+    background-image:
+      repeating-linear-gradient(88deg,
+        rgba(0,0,0,.10) 0 1px,
+        rgba(255,226,178,.028) 1px 3px,
+        rgba(0,0,0,.06) 3px 6px),
+      linear-gradient(180deg,#7d5231,#5c3a20 56%,#472b18);
+    border-radius: 16px;
+    box-shadow:
+      inset 0 0 0 2px rgba(169,116,63,.85),
+      inset 0 0 26px rgba(0,0,0,.45),
+      0 14px 30px rgba(0,0,0,.55);
+    position: relative;
+  }
+
+  .channel-card.chA::before {
+    content: '';
+    position: absolute; top: 0; left: 0; right: 0; height: 4px;
+    background: linear-gradient(90deg, transparent, var(--emerald), transparent);
+    border-radius: 16px 16px 0 0;
+  }
+
+  .channel-card.chB::before {
+    content: '';
+    position: absolute; top: 0; left: 0; right: 0; height: 4px;
+    background: linear-gradient(90deg, transparent, var(--amber), transparent);
+    border-radius: 16px 16px 0 0;
+  }
+
+  .channel-title {
+    font-size: 1.4rem;
+    margin-bottom: 1rem;
+    text-shadow: 0 1px 0 rgba(43,24,12,.9), 0 3px 7px rgba(0,0,0,.6);
+    letter-spacing: 0.05em;
+  }
+
+  .chA .channel-title { color: var(--emerald); }
+  .chB .channel-title { color: var(--amber); }
+
+  ul {
+    list-style: none;
+    padding: 0;
+    margin: 0.5rem 0;
+    border-top: 2px solid #8a6a3f;
+    max-height: 200px;
+    overflow-y: auto;
+    background:
+      radial-gradient(ellipse 30px 25px at 15% 20%, rgba(70,52,30,0.08), transparent 60%),
+      repeating-linear-gradient(0deg,
+        transparent 0 1px,
+        rgba(139,119,88,0.03) 1px 2px,
+        transparent 2px 4px),
+      linear-gradient(180deg, #f5e6c8 0%, #e8d4a8 50%, #dcc79c 100%);
+    border-radius: 8px;
+    box-shadow: inset 0 3px 8px rgba(66,42,20,.25);
+  }
+
+  li {
+    padding: 0.5rem;
+    border-bottom: 1px solid #a0845a;
+    cursor: pointer;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 1rem;
+    color: var(--ink);
+    background: rgba(255,255,255,0.05);
+  }
+
+  li:last-child { border-bottom: none; }
+  li:hover {
+    background: rgba(214,171,96,0.3);
+  }
+
+  li.active {
+    background: rgba(214,171,96,0.4);
+    border-left: 4px solid var(--gold);
+  }
+
+  li span.title {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  li button.remove {
+    background: linear-gradient(180deg,#c96a5a,#8b3828);
+    border: 2px solid #8b3828;
+    color: #fff0e8;
+    padding: 0.3rem 0.8rem;
+    font-size: 0.9rem;
+    box-shadow: 0 5px 12px rgba(0,0,0,.5);
+  }
+
+  li button.remove:hover {
+    box-shadow:
+      inset 0 1px 0 rgba(255,235,220,.35),
+      inset 0 -4px 8px rgba(0,0,0,.5),
+      0 9px 18px rgba(199,75,58,.4);
+  }
+
+  .muted { color: rgba(232,205,158,.78); font-size: 1rem; font-style: italic; }
   .hidden { display: none !important; }
-  .share-link { word-break: break-all; background: var(--bg-dark); padding: 1rem; border: 2px solid var(--accent-red); display: block; margin: 1rem 0; color: var(--accent-orange); }
-  .control-group { display: flex; gap: 0.3rem; flex-wrap: wrap; margin: 1rem 0; }
-  .control-btn { width: 48px; height: 48px; font-size: 1.4rem; display: flex; align-items: center; justify-content: center; }
-  .status-bar { background: var(--bg-dark); border: 2px solid var(--border); padding: 0.5rem 1rem; font-size: 1rem; color: var(--accent-orange); }
-  .room-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; flex-wrap: wrap; }
-  .role-badge { padding: 0.4rem 1rem; border: 2px solid var(--accent-red); color: var(--accent-red); font-size: 0.95rem; background: var(--bg-dark); }
-  .now-playing { color: var(--accent-orange); font-size: 1.1rem; }
-  input[type="range"] { -webkit-appearance: none; height: 10px; background: var(--bg-dark); border: 2px solid var(--border-light); }
-  input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 18px; height: 18px; background: var(--accent-red); }
-  .system-status { text-align: center; color: var(--text-dim); font-size: 0.85rem; margin-top: 2rem; }
-  label { color: var(--text-dim); font-size: 1rem; }
 
-  /* Footer responsive */
-  @media(max-width: 700px) { .cols-footer { grid-template-columns: 1fr !important; } }
+  .share-link {
+    word-break: break-all;
+    background: linear-gradient(180deg,#f1e5c8,#dcc79c);
+    padding: 1rem;
+    border: 2px solid var(--gold);
+    display: block;
+    margin: 1rem 0;
+    color: var(--ink);
+    border-radius: 9px;
+    font-family: monospace;
+    box-shadow: inset 0 3px 8px rgba(66,42,20,.35);
+  }
 
-  .repeat-active {
-    color: var(--accent-orange) !important;
-    background: rgba(255, 170, 85, 0.3) !important;
-    border-color: var(--accent-orange) !important;
-    box-shadow: 0 0 10px rgba(255, 170, 85, 0.5);
+  .control-group {
+    display: flex;
+    gap: 0.3rem;
+    flex-wrap: wrap;
+    margin: 1rem 0;
+  }
+
+  .control-btn {
+    width: 48px;
+    height: 48px;
+    font-size: 1.4rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    background: linear-gradient(180deg,#94643a,#5c3a20);
+    border: 2px solid #8a6a3f;
+  }
+
+  .room-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1rem;
+    flex-wrap: wrap;
+  }
+
+  .role-badge {
+    padding: 0.4rem 1rem;
+    border: 2px solid var(--gold);
+    color: var(--gold);
+    font-size: 0.95rem;
+    background: linear-gradient(180deg,#7d5231,#4f3119);
+    border-radius: 22px;
+    letter-spacing: 0.06em;
+  }
+
+  .now-playing {
+    color: var(--amber);
+    font-size: 1.1rem;
+    font-weight: 700;
+    text-shadow: 0 1px 0 rgba(43,24,12,.9);
+  }
+
+  input[type="range"] {
+    -webkit-appearance: none;
+    height: 14px;
+    background: linear-gradient(180deg,#f1e5c8,#dcc79c);
+    border: 2px solid #8a6a3f;
+    border-radius: 7px;
+    box-shadow: inset 0 3px 8px rgba(66,42,20,.35);
+  }
+
+  input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 22px;
+    height: 22px;
+    background: linear-gradient(180deg,#d6ab60,#8a6a3f);
+    border: 2px solid #5a3820;
+    border-radius: 50%;
+    box-shadow:
+      inset 0 1px 0 rgba(255,224,175,.5),
+      0 3px 8px rgba(0,0,0,.5);
+    cursor: pointer;
+  }
+
+  .system-status {
+    text-align: center;
+    color: rgba(232,205,158,.62);
+    font-size: 0.85rem;
+    margin-top: 2rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+  }
+
+  label {
+    color: rgba(238,213,168,.85);
+    font-size: 1rem;
+    letter-spacing: 0.05em;
+  }
+
+  .status-bar {
+    background: linear-gradient(180deg,#7d5231,#4f3119);
+    border: 2px solid #8a6a3f;
+    padding: 0.5rem 1rem;
+    font-size: 1rem;
+    color: var(--emerald);
+    border-radius: 9px;
+    box-shadow:
+      inset 0 3px 8px rgba(66,42,20,.35),
+      0 5px 12px rgba(0,0,0,.5);
+    font-weight: 700;
   }
 
   #audioUnlock {
@@ -88,7 +430,7 @@
     left: 0;
     right: 0;
     bottom: 0;
-    background: rgba(26, 26, 30, 0.98);
+    background: rgba(42, 24, 16, 0.98);
     display: flex;
     flex-direction: column;
     justify-content: center;
@@ -97,29 +439,29 @@
   }
 
   #audioUnlock h2 {
-    color: var(--accent-red);
+    color: var(--gold-bright);
     font-size: 2.5rem;
     margin-bottom: 1rem;
-    text-shadow: 0 0 10px rgba(255, 68, 68, 0.5);
+    text-shadow:
+      0 1px 0 rgba(43,24,12,.95),
+      0 -1px 0 rgba(255,244,214,.35),
+      0 4px 10px rgba(0,0,0,.65);
   }
 
   #audioUnlock p {
-    color: var(--text-dim);
+    color: rgba(232,205,158,.78);
     font-size: 1.2rem;
     margin-bottom: 2rem;
+    font-style: italic;
   }
 
   #audioUnlock button {
     font-size: 1.5rem;
     padding: 1rem 3rem;
     letter-spacing: 2px;
-    animation: pulse 2s infinite;
   }
 
-  @keyframes pulse {
-    0%, 100% { box-shadow: 0 0 5px var(--accent-red); }
-    50% { box-shadow: 0 0 20px var(--accent-red); }
-  }
+  @media(max-width: 700px) { .cols { grid-template-columns: 1fr; } }
 </style>
 </head>
 <body>
@@ -130,9 +472,17 @@
   <button class="accent" id="enableAudioBtn">ENABLE AUDIO SYSTEM</button>
 </div>
 
-<h1>🎲 RPG SOUND ROOM</h1>
+<h1><svg class="d20" viewBox="4 4 100 100" aria-hidden="true" focusable="false">
+  <!-- outer icosahedral shell -->
+  <polygon class="shell" points="100,54 77,93.8 31,93.8 8,54 31,14.2 77,14.2"/>
+  <!-- spokes from the inner face to the shell -->
+  <path class="wire" d="M54 33 L77 14.2 M54 33 L31 14.2 M72.19 64.5 L100 54 M72.19 64.5 L77 93.8 M35.81 64.5 L8 54 M35.81 64.5 L31 93.8"/>
+  <!-- the face showing the roll -->
+  <polygon class="face" points="54,33 72.19,64.5 35.81,64.5"/>
+  <text class="num" x="54" y="56" text-anchor="middle" dominant-baseline="central">20</text>
+</svg> RPG SOUND ROOM</h1>
 
-<div id="landing" class="card">
+<div id="landing" class="panel">
   <h2>INITIALIZE SESSION</h2>
   <p class="muted">Creating a room makes you the DJ.</p>
   <div class="row">
@@ -142,7 +492,7 @@
   <p class="muted">Or use a room link from your operator.</p>
 </div>
 
-<div id="djSetup" class="card hidden">
+<div id="djSetup" class="panel hidden">
   <h2>SESSION READY</h2>
   <p style="margin:1rem 0;">Share this link with your crew:</p>
   <span class="share-link" id="shareLink"></span>
@@ -150,7 +500,7 @@
 </div>
 
 <div id="room" class="hidden">
-  <div class="card">
+  <div class="panel">
     <div class="room-header">
       <h2 style="margin:0">ROOM: <span id="roomLabel"></span></h2>
       <span class="role-badge" id="roleLabel"></span>
@@ -158,101 +508,80 @@
     <div class="row">
       <label>MASTER GAIN:</label>
       <input type="range" min="0" max="100" value="100" id="masterVol" style="max-width:200px">
-      <span id="masterVal">100%</span>
+      <span id="masterVal" style="color:var(--amber); font-weight:700;">100%</span>
     </div>
     <div class="status-bar" id="connectionStatus">STATUS: ONLINE</div>
   </div>
 
   <div id="djControls" class="cols djOnly">
-    <div class="card channel-card chA">
+    <div class="channel-card chA">
       <h3 class="channel-title">🌊 CHANNEL A [AMBIENCE]</h3>
       <div class="status-bar">ACTIVE: <span id="nowTitleA" class="now-playing">NONE</span></div>
       <div class="row">
         <label>CROSSFADE:</label>
-        <input type="number" min="0" max="10" value="3" id="crossfadeA" style="width:60px">s
+        <input type="number" min="0" max="10" value="3" id="crossfadeA" style="width:60px;padding:8px;">s
       </div>
-      <div class="row"><label>GAIN:</label><input type="range" min="0" max="100" value="100" id="volA"><span id="volValA">100%</span></div>
+      <div class="row">
+        <label>GAIN:</label>
+        <input type="range" min="0" max="100" value="100" id="volA">
+        <span id="volValA" style="color:var(--amber); font-weight:700;">100%</span>
+      </div>
       <div class="control-group">
         <button class="control-btn" onclick="dj('repeat',{channel:'A'})" id="repeatA" title="REPEAT TRACK">🔁</button>
         <button class="control-btn" onclick="dj('prev',{channel:'A'})">⏮</button>
         <button class="control-btn" onclick="dj('toggle',{channel:'A'})" id="playA">▶</button>
         <button class="control-btn" onclick="dj('next',{channel:'A'})">⏭</button>
-        <button class="control-btn" onclick="dj('stop',{channel:'A'})" style="background:var(--accent-red);color:var(--bg-deep)">⏹</button>
+        <button class="control-btn" onclick="dj('stop',{channel:'A'})" style="background:linear-gradient(180deg,#c96a5a,#8b3828);border-color:#8b3828;color:#fff0e8">⏹</button>
       </div>
       <div class="row">
-        <input id="urlA" placeholder="URL">
+        <input id="urlA" placeholder="URL" style="flex:1">
         <input id="titleA" placeholder="NAME" style="flex:0.6">
         <button class="accent" onclick="queue('A')">LOAD</button>
         <input type="file" id="fileInputA" accept=".mp3,.ogg,.wav,.m4a" style="display:none" onchange="uploadFile('A', this)">
         <button class="control-btn" onclick="document.getElementById('fileInputA').click()" title="UPLOAD LOCAL FILE">📁</button>
       </div>
-      <div style="font-size:0.9rem;color:var(--text-dim)">PLAYLIST [<span id="countA">0</span>]</div>
+      <div style="font-size:0.9rem;color:rgba(238,213,168,.85); margin-top:0.5rem">PLAYLIST [<span id="countA">0</span>]</div>
       <ul id="listA"></ul>
     </div>
 
-    <div class="card channel-card chB">
+    <div class="channel-card chB">
       <h3 class="channel-title">🎵 CHANNEL B [MUSIC]</h3>
       <div class="status-bar">ACTIVE: <span id="nowTitleB" class="now-playing">NONE</span></div>
       <div class="row">
         <label>CROSSFADE:</label>
-        <input type="number" min="0" max="10" value="3" id="crossfadeB" style="width:60px">s
+        <input type="number" min="0" max="10" value="3" id="crossfadeB" style="width:60px;padding:8px;">s
       </div>
-      <div class="row"><label>GAIN:</label><input type="range" min="0" max="100" value="100" id="volB"><span id="volValB">100%</span></div>
+      <div class="row">
+        <label>GAIN:</label>
+        <input type="range" min="0" max="100" value="100" id="volB">
+        <span id="volValB" style="color:var(--amber); font-weight:700;">100%</span>
+      </div>
       <div class="control-group">
         <button class="control-btn" onclick="dj('repeat',{channel:'B'})" id="repeatB" title="REPEAT TRACK">🔁</button>
         <button class="control-btn" onclick="dj('prev',{channel:'B'})">⏮</button>
         <button class="control-btn" onclick="dj('toggle',{channel:'B'})" id="playB">▶</button>
         <button class="control-btn" onclick="dj('next',{channel:'B'})">⏭</button>
-        <button class="control-btn" onclick="dj('stop',{channel:'B'})" style="background:var(--accent-red);color:var(--bg-deep)">⏹</button>
+        <button class="control-btn" onclick="dj('stop',{channel:'B'})" style="background:linear-gradient(180deg,#c96a5a,#8b3828);border-color:#8b3828;color:#fff0e8">⏹</button>
       </div>
       <div class="row">
-        <input id="urlB" placeholder="URL">
+        <input id="urlB" placeholder="URL" style="flex:1">
         <input id="titleB" placeholder="NAME" style="flex:0.6">
         <button class="accent" onclick="queue('B')">LOAD</button>
         <input type="file" id="fileInputB" accept=".mp3,.ogg,.wav,.m4a" style="display:none" onchange="uploadFile('B', this)">
         <button class="control-btn" onclick="document.getElementById('fileInputB').click()" title="UPLOAD LOCAL FILE">📁</button>
       </div>
-      <div style="font-size:0.9rem;color:var(--text-dim)">PLAYLIST [<span id="countB">0</span>]</div>
+      <div style="font-size:0.9rem;color:rgba(238,213,168,.85); margin-top:0.5rem">PLAYLIST [<span id="countB">0</span>]</div>
       <ul id="listB"></ul>
     </div>
   </div>
 </div>
-<div id="ko-fi-support-widget" style="position: fixed; top: 20px; right: 20px; z-index: 1000;">
-    <script type='text/javascript' src='https://storage.ko-fi.com/cdn/widget/Widget_2.js'></script>
-    <script type='text/javascript'>kofiwidget2.init('Support me on Ko-fi', '#ff5c5c', 'Q8Y22953MB');kofiwidget2.draw();</script>
-</div>
+
 <audio id="audioA"></audio>
 <audio id="audioB"></audio>
 <div id="ytA" style="width:1px;height:1px;overflow:hidden"></div>
 <div id="ytB" style="width:1px;height:1px;overflow:hidden"></div>
 
 <div class="system-status">SYSTEM VERSION 1.0 // AUDIO DISTRIBUTION NODE</div>
-
-<!-- USAGE GUIDE FOOTER -->
-<div class="footer-info" style="margin-top: 3rem; padding: 1.5rem; border: 2px solid var(--border); background: rgba(42, 42, 50, 0.6); font-size: 0.9rem;">
-  <h3 style="color: var(--accent-red); margin: 0 0 1rem; font-size: 1.2rem;">📋 Quick Start Guide</h3>
-  <div class="cols-footer" style="display: grid; grid-template-columns: 1fr 1fr; gap: 2rem; margin-bottom: 1.5rem;">
-    <div>
-      <h4 style="color: var(--accent-orange); margin: 0 0 0.5rem;">How to Use</h4>
-      <ul style="color: var(--text-dim); margin: 0; padding-left: 1.2rem; line-height: 1.8;">
-        <li>Create room → Upload/paste tracks → Share link</li>
-        <li>Wait for all players before starting</li>
-        <li>Operators control playback; listeners follow</li>
-      </ul>
-    </div>
-    <div>
-      <h4 style="color: var(--accent-orange); margin: 0 0 0.5rem;">YouTube & Legal</h4>
-      <ul style="color: var(--text-dim); margin: 0; padding-left: 1.2rem; line-height: 1.8;">
-        <li>Uses official YouTube IFrame API</li>
-        <li>Personal/non-commercial use only</li>
-        <li>No re-streaming or redistribution</li>
-      </ul>
-    </div>
-  </div>
-  <p style="color: var(--text-dim); margin: 0; font-size: 0.85rem; line-height: 1.6;">
-    <strong>Note:</strong> Each listener loads videos independently — slight desync is normal. Local file uploads expire when server restarts. Keep tabs open and visible for best results.
-  </p>
-</div>
 
 <script src="/socket.io/socket.io.js"></script>
 <script>
@@ -371,7 +700,6 @@ async function createRoom() {
     return alert(err.error || "Could not create room.");
   }
   const data = await res.json();
-  // Store token using the EXACT ID the server returned (already lowercase + sanitized)
   localStorage.setItem("dj-" + data.roomId, data.djToken);
   document.getElementById("shareLink").textContent = location.origin + "/?room=" + data.roomId;
   document.getElementById("djSetup").classList.remove("hidden");
@@ -383,7 +711,6 @@ function enterRoom() { location.href = "/?room=" + (pendingRoom || roomId); }
 
 const urlRoom = params.get("room");
 if (urlRoom) {
-  // CASE FIX: normalize room name from URL so "Dungeon" == "dungeon"
   const normalizedRoom = urlRoom.trim().replace(/[^a-zA-Z0-9-]/g, "").toLowerCase();
   djToken = localStorage.getItem("dj-" + normalizedRoom) || null;
   roomId = normalizedRoom;
@@ -445,7 +772,6 @@ function queue(ch) {
   const title = document.getElementById("title" + ch).value.trim() || "UNNAMED";
   if (!url) return alert("Paste a link first.");
 
-  // Reject file:// URLs
   if (url.startsWith("file:") || url.startsWith("/")) {
     return alert("Local file paths don't work! Use the 📁 UPLOAD button to load files from your computer.");
   }
