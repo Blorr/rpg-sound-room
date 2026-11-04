@@ -186,7 +186,8 @@ io.on("connection", (socket) => {
         channel,
         ...ch.tracks[ch.currentIndex],
         playing: true,
-        volume: ch.volume
+        volume: ch.volume,
+        transition: true
       });
     } else if (ch.currentIndex < ch.tracks.length - 1) {
       ch.currentIndex++;
@@ -197,7 +198,8 @@ io.on("connection", (socket) => {
         channel,
         ...ch.tracks[ch.currentIndex],
         playing: true,
-        volume: ch.volume
+        volume: ch.volume,
+        transition: true
       });
     }
   });
@@ -269,7 +271,13 @@ function handleAction(action, p, room, roomId) {
       ch.playing = true;
       ch.position = 0;
       ch.updatedAt = Date.now();
-      io.to(roomId).emit("nowPlaying", { channel: p.channel, ...ch.tracks[p.index], playing: true, volume: ch.volume });
+      io.to(roomId).emit("nowPlaying", { 
+        channel: p.channel, 
+        ...ch.tracks[p.index], 
+        playing: true, 
+        volume: ch.volume,
+        transition: true
+      });
       break;
     case "prev":
       if (ch.currentIndex > 0) {
@@ -277,7 +285,13 @@ function handleAction(action, p, room, roomId) {
         ch.playing = true;
         ch.position = 0;
         ch.updatedAt = Date.now();
-        io.to(roomId).emit("nowPlaying", { channel: p.channel, ...ch.tracks[ch.currentIndex], playing: true, volume: ch.volume });
+        io.to(roomId).emit("nowPlaying", { 
+          channel: p.channel, 
+          ...ch.tracks[ch.currentIndex], 
+          playing: true, 
+          volume: ch.volume,
+          transition: true
+        });
       }
       break;
     case "next":
@@ -286,7 +300,13 @@ function handleAction(action, p, room, roomId) {
         ch.playing = true;
         ch.position = 0;
         ch.updatedAt = Date.now();
-        io.to(roomId).emit("nowPlaying", { channel: p.channel, ...ch.tracks[ch.currentIndex], playing: true, volume: ch.volume });
+        io.to(roomId).emit("nowPlaying", { 
+          channel: p.channel, 
+          ...ch.tracks[ch.currentIndex], 
+          playing: true, 
+          volume: ch.volume,
+          transition: true
+        });
       }
       break;
     case "repeat":
@@ -309,17 +329,33 @@ function handleAction(action, p, room, roomId) {
         ch.playing = true;
         ch.position = 0;
         ch.updatedAt = Date.now();
-        io.to(roomId).emit("nowPlaying", { channel: p.channel, ...ch.tracks[ch.currentIndex], playing: true, volume: ch.volume });
+        io.to(roomId).emit("nowPlaying", { 
+          channel: p.channel, 
+          ...ch.tracks[ch.currentIndex], 
+          playing: true, 
+          volume: ch.volume,
+          transition: true
+        });
         break;
       }
       ch.playing = !ch.playing;
       ch.updatedAt = Date.now();
-      io.to(roomId).emit("playbackState", { channel: p.channel, playing: ch.playing });
+      io.to(roomId).emit("playbackState", { 
+        channel: p.channel, 
+        playing: ch.playing,
+        transition: true
+      });
       break;
     case "stop":
       ch.playing = false;
       ch.updatedAt = Date.now();
-      io.to(roomId).emit("nowPlaying", { channel: p.channel, src: null, title: null, playing: false });
+      io.to(roomId).emit("nowPlaying", { 
+        channel: p.channel, 
+        src: null, 
+        title: null, 
+        playing: false,
+        transition: true
+      });
       break;
     case "volume":
       ch.volume = Math.max(0, Math.min(100, p.volume));
