@@ -489,7 +489,7 @@
     <input id="newRoomName" placeholder="Room name (optional)">
     <button class="accent" onclick="createRoom()">INITIALIZE</button>
   </div>
-  <p class="muted">Or use a room link from your operator.</p>
+  <p class="muted">Leave the name blank for a random room, or use a room link from your operator.</p>
 </div>
 
 <div id="djSetup" class="panel hidden">
@@ -581,9 +581,7 @@
 <div id="ytA" style="width:1px;height:1px;overflow:hidden"></div>
 <div id="ytB" style="width:1px;height:1px;overflow:hidden"></div>
 
-<div class="system-status">SYSTEM VERSION 1.0 // AUDIO DISTRIBUTION NODE</div>
-
-// ... (keep all CSS and HTML unchanged) ...
+<div class="system-status">SYSTEM VERSION 1.1 // AUDIO DISTRIBUTION NODE</div>
 
 <script src="/socket.io/socket.io.js"></script>
 <script>
@@ -610,44 +608,114 @@ let fadeTimers = { A: [], B: [] };
 let pendingRejoin = false;
 let pendingRoom = null;
 
-// Handle browser sleep/wake to prevent audio drift
+// ── CONNECTION LIFECYCLE ────────────────────────────────
 document.addEventListener("visibilitychange", () => {
-  if (document.visibilityState === "visible" && roomId && !pendingRejoin) {
-    pendingRejoin = true;
-    setTimeout(() => {
-      socket.emit("ping");
+  if (!document.hidden) {
+    document.getElementById("connectionStatus").textContent = socket.connected ? "STATUS: ONLINE" : "STATUS: RECONNECTING...";
+    if (socket.connected && pendingRejoin && roomId) {
+      console.log("🔄 Tab visible, triggering rejoin");
+      socket.emit("join", roomId);
       pendingRejoin = false;
-    }, 500);
+    }
+  } else {
+    document.getElementById("connectionStatus").textContent = "STATUS: BACKGROUND";
   }
 });
 
-socket.on("pong", () => {
-  document.getElementById("connectionStatus").textContent = "STATUS: ONLINE";
-});
+setInterval(() => { if (socket.connected) { socket.emit("ping"); } }, 30000);
+socket.on("pong", () => { console.log("❤️ Heartbeat acknowledged"); });
 
 socket.on("disconnect", (reason) => {
-  console.log(`⚠️ Disconnected: ${reason}`);
-  document.getElementById("connectionStatus").textContent = "STATUS: DISCONNECTED";
-  if (roomId) {
-    pendingRejoin = true;
-    pendingRoom = roomId;
-    reconnectAttempts++;
-    setTimeout(() => {
-      if (pendingRejoin && pendingRoom) {
-        console.log(`🔄 Attempting reconnect (${reconnectAttempts})...`);
-        socket.connect();
-        socket.emit("join", pendingRoom);
-      }
-    }, Math.min(1000 * reconnectAttempts, 10000));
+  console.log(`❌ Disconnected: ${reason}`);
+  document.getElementById("connectionStatus").textContent = "STATUS: DISCONNECTED (reconnecting...)";
+  pendingRejoin = true;
+});
+
+socket.on("connect", () => {
+  console.log("✅ Connected");
+  document.getElementById("connectionStatus").textContent = "STATUS: ONLINE";
+  if (pendingRejoin && roomId) {
+    console.log("🔄 Rejoining room after reconnection");
+    socket.emit("join", roomId);
+    pendingRejoin = false;
+  } else if (reconnectAttempts > 0 && roomId) {
+    socket.emit("join", roomId);
+    reconnectAttempts = 0;
   }
 });
 
-socket.on("reconnect", (attemptNumber) => {
-  console.log(`✅ Reconnected after ${attemptNumber} attempts`);
-  reconnectAttempts = 0;
-  pendingRejoin = false;
+socket.on("connect_error", (err) => {
+  console.error("❌ Connect error:", err.message);
+  reconnectAttempts++;
+  document.getElementById("connectionStatus").textContent = `STATUS: ERROR (${reconnectAttempts})`;
 });
 
+// ── GAME STATE LISTENERS (registered exactly once) ─────
+socket.on("state", room => {
+  paint(room.channelA, "A");
+  paint(room.channelB, "B");
+  updateRepeatButtons(room.channelA.repeat, room.channelB.repeat);
+});
+
+socket.on("playlistUpdate", ({channelA, channelB}) => { paint(channelA, "A"); paint(channelB, "B"); });
+
+socket.on("repeatUpdate", ({ channel, repeat }) => {
+  const btn = document.getElementById("repeat" + channel);
+  if (btn) repeat ? btn.classList.add("repeat-active") : btn.classList.remove("repeat-active");
+});
+
+socket.on("nowPlaying", ({ channel, type, src, title, playing, transition }) => {
+  if (src && playing === true) {
+    channelType[channel] = type;
+    document.getElementById("nowTitle" + channel).textContent = title;
+    document.getElementById("play" + channel).textContent = "⏸";
+    if (type === "file") handleAudioFile(channel, src, !!transition);
+    else handleYouTube(channel, src, !!transition);
+  } else {
+    // Stop command - check if we should fade out first
+    stopChannel(channel, !!transition);
+  }
+});
+
+socket.on("playbackState", ({ channel, playing, transition }) => {
+  document.getElementById("play" + channel).textContent = playing ? "⏸" : "▶";
+
+  if (channelType[channel] === "file") {
+    if (transition && playing) {
+      fadeAudioFileIn(channel);       // Play after pause - fade in
+    } else if (transition && !playing) {
+      fadeAudioFileOut(channel);      // Pause - fade out
+    } else {
+      playing ? audio[channel].play().catch(console.warn) : audio[channel].pause();
+    }
+  } else if (ytPlayers[channel]) {
+    if (transition && playing) {
+      fadeYoutubeIn(channel);         // Play after pause - fade in
+    } else if (transition && !playing) {
+      fadeYoutubeOut(channel);        // Pause - fade out
+    } else {
+      playing ? ytPlayers[channel].playVideo() : ytPlayers[channel].pauseVideo();
+    }
+  }
+});
+
+socket.on("volumeChange", ({ channel, volume }) => {
+  roomVol[channel] = volume/100;
+  document.getElementById("vol" + channel).value = volume;
+  document.getElementById("volVal" + channel).textContent = volume + "%";
+  applyVolumes();
+});
+
+socket.on("crossfadeUpdate", (seconds) => {
+  document.getElementById("crossfadeA").value = seconds;
+  document.getElementById("crossfadeB").value = seconds;
+  crossfadeMs.A = seconds * 1000;
+  crossfadeMs.B = seconds * 1000;
+});
+
+socket.on("roomNotFound", () => { alert("Room not found."); location.href = "/"; });
+
+// ── AUDIO UNLOCK OVERLAY ────────────────────────────────
 window.addEventListener("DOMContentLoaded", () => {
   const urlRoom = params.get("room");
   if (urlRoom) {
@@ -691,109 +759,26 @@ function unlockAudio() {
   waitingForUnlock = [];
 }
 
-function createRoom() {
-  const name = document.getElementById("newRoomName").value.trim().replace(/[^a-zA-Z0-9-]/g, "").toLowerCase();
-  if (!name) return alert("Enter a room name (letters/numbers/hyphens only).");
-  if (name.length > 32) return alert("Room name too long (max 32 characters).");
-
-  fetch("/api/rooms", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ roomId: name })
-  })
-  .then(res => res.json())
-  .then(data => {
-    if (data.error) return alert(data.error);
-    roomId = data.roomId;
-    djToken = data.djToken;
-    localStorage.setItem("dj-" + roomId, djToken);
-    const url = new URL(location.href);
-    url.searchParams.set("room", roomId);
-    history.replaceState({}, "", url);
-    enterRoom();
-  })
-  .catch(err => alert("Failed to create room: " + err.message));
-}
-
-function enterRoom() {
-  if (!roomId) return;
-  const normalizedRoom = roomId.trim().replace(/[^a-zA-Z0-9-]/g, "").toLowerCase();
-  djToken = localStorage.getItem("dj-" + normalizedRoom) || null;
-  socket.emit("join", normalizedRoom);
-
-  socket.on("state", room => {
-    paint(room.channelA, "A");
-    paint(room.channelB, "B");
-    updateRepeatButtons(room.channelA.repeat, room.channelB.repeat);
-  });
-  socket.on("playlistUpdate", ({channelA, channelB}) => { paint(channelA, "A"); paint(channelB, "B"); });
-  socket.on("repeatUpdate", ({ channel, repeat }) => {
-    const btn = document.getElementById("repeat" + channel);
-    if (btn) repeat ? btn.classList.add("repeat-active") : btn.classList.remove("repeat-active");
-  });
-  socket.on("nowPlaying", ({ channel, type, src, title, playing, transition }) => {
-    if (src && playing === true) {
-      channelType[channel] = type;
-      document.getElementById("nowTitle" + channel).textContent = title;
-      document.getElementById("play" + channel).textContent = "⏸";
-      if (type === "file") handleAudioFile(channel, src, !!transition);
-      else handleYouTube(channel, src, !!transition);
-    } else {
-      // Stop command - check if we should crossfade out
-      stopChannel(channel, !!transition);
-    }
-  });
-  
-  socket.on("playbackState", ({ channel, playing, transition }) => {
-    document.getElementById("play" + channel).textContent = playing ? "⏸" : "▶";
-    
-    if (channelType[channel] === "file") {
-      if (transition && playing) {
-        // Play after pause - fade in
-        fadeAudioFileIn(channel);
-      } else if (transition && !playing) {
-        // Pause - fade out
-        fadeAudioFileOut(channel);
-      } else {
-        // Non-transition play/pause (legacy support)
-        playing ? audio[channel].play().catch(console.warn) : audio[channel].pause();
-      }
-    } else if (ytPlayers[channel]) {
-      if (transition && playing) {
-        // Play after pause - fade in
-        fadeYoutubeIn(channel);
-      } else if (transition && !playing) {
-        // Pause - fade out
-        fadeYoutubeOut(channel);
-      } else {
-        // Non-transition play/pause (legacy support)
-        playing ? ytPlayers[channel].playVideo() : ytPlayers[channel].pauseVideo();
-      }
-    }
-  });
-  
-  socket.on("volumeChange", ({ channel, volume }) => {
-    roomVol[channel] = volume/100;
-    document.getElementById("vol" + channel).value = volume;
-    document.getElementById("volVal" + channel).textContent = volume + "%";
-    applyVolumes();
-  });
-  socket.on("crossfadeUpdate", (seconds) => {
-    // Update both crossfade inputs
-    document.getElementById("crossfadeA").value = seconds;
-    document.getElementById("crossfadeB").value = seconds;
-    crossfadeMs.A = seconds * 1000;
-    crossfadeMs.B = seconds * 1000;
-  });
-  socket.on("roomNotFound", () => { alert("Room not found."); location.href = "/"; });
-
+// ── ROOM CREATION / ENTRY ───────────────────────────────
+async function createRoom() {
+  // FIXED: name is optional — empty means the server generates a random room
+  const name = document.getElementById("newRoomName").value.trim();
+  const res = await fetch("/api/rooms", { method: "POST", headers: {"Content-Type":"application/json"}, body: JSON.stringify({ roomId: name }) });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    return alert(err.error || "Could not create room.");
+  }
+  const data = await res.json();
+  localStorage.setItem("dj-" + data.roomId, data.djToken);
+  document.getElementById("shareLink").textContent = location.origin + "/?room=" + data.roomId;
+  document.getElementById("djSetup").classList.remove("hidden");
   document.getElementById("landing").classList.add("hidden");
-  document.getElementById("room").classList.remove("hidden");
-  document.getElementById("roomLabel").textContent = roomId;
-  document.getElementById("roleLabel").textContent = djToken ? "PRIMARY OPERATOR 🎛️" : "LISTENER MODE";
-  if (!djToken) document.querySelectorAll(".djOnly").forEach(el => el.classList.add("hidden"));
+  pendingRoom = data.roomId;
 }
 
+function enterRoom() { location.href = "/?room=" + (pendingRoom || roomId); }
+
+// Auto-join via ?room= URL parameter
 const urlRoom = params.get("room");
 if (urlRoom) {
   const normalizedRoom = urlRoom.trim().replace(/[^a-zA-Z0-9-]/g, "").toLowerCase();
@@ -801,72 +786,6 @@ if (urlRoom) {
   roomId = normalizedRoom;
   socket.emit("join", roomId);
 
-  socket.on("state", room => {
-    paint(room.channelA, "A");
-    paint(room.channelB, "B");
-    updateRepeatButtons(room.channelA.repeat, room.channelB.repeat);
-  });
-  socket.on("playlistUpdate", ({channelA, channelB}) => { paint(channelA, "A"); paint(channelB, "B"); });
-  socket.on("repeatUpdate", ({ channel, repeat }) => {
-    const btn = document.getElementById("repeat" + channel);
-    if (btn) repeat ? btn.classList.add("repeat-active") : btn.classList.remove("repeat-active");
-  });
-  socket.on("nowPlaying", ({ channel, type, src, title, playing, transition }) => {
-    if (src && playing === true) {
-      channelType[channel] = type;
-      document.getElementById("nowTitle" + channel).textContent = title;
-      document.getElementById("play" + channel).textContent = "⏸";
-      if (type === "file") handleAudioFile(channel, src, !!transition);
-      else handleYouTube(channel, src, !!transition);
-    } else {
-      // Stop command - check if we should crossfade out
-      stopChannel(channel, !!transition);
-    }
-  });
-  
-  socket.on("playbackState", ({ channel, playing, transition }) => {
-    document.getElementById("play" + channel).textContent = playing ? "⏸" : "▶";
-    
-    if (channelType[channel] === "file") {
-      if (transition && playing) {
-        // Play after pause - fade in
-        fadeAudioFileIn(channel);
-      } else if (transition && !playing) {
-        // Pause - fade out
-        fadeAudioFileOut(channel);
-      } else {
-        // Non-transition play/pause (legacy support)
-        playing ? audio[channel].play().catch(console.warn) : audio[channel].pause();
-      }
-    } else if (ytPlayers[channel]) {
-      if (transition && playing) {
-        // Play after pause - fade in
-        fadeYoutubeIn(channel);
-      } else if (transition && !playing) {
-        // Pause - fade out
-        fadeYoutubeOut(channel);
-      } else {
-        // Non-transition play/pause (legacy support)
-        playing ? ytPlayers[channel].playVideo() : ytPlayers[channel].pauseVideo();
-      }
-    }
-  });
-  
-  socket.on("volumeChange", ({ channel, volume }) => {
-    roomVol[channel] = volume/100;
-    document.getElementById("vol" + channel).value = volume;
-    document.getElementById("volVal" + channel).textContent = volume + "%";
-    applyVolumes();
-  });
-  socket.on("crossfadeUpdate", (seconds) => {
-    // Update both crossfade inputs
-    document.getElementById("crossfadeA").value = seconds;
-    document.getElementById("crossfadeB").value = seconds;
-    crossfadeMs.A = seconds * 1000;
-    crossfadeMs.B = seconds * 1000;
-  });
-  socket.on("roomNotFound", () => { alert("Room not found."); location.href = "/"; });
-
   document.getElementById("landing").classList.add("hidden");
   document.getElementById("room").classList.remove("hidden");
   document.getElementById("roomLabel").textContent = roomId;
@@ -874,6 +793,7 @@ if (urlRoom) {
   if (!djToken) document.querySelectorAll(".djOnly").forEach(el => el.classList.add("hidden"));
 }
 
+// ── DJ COMMANDS ─────────────────────────────────────────
 function dj(action, payload) {
   if (!djToken) { alert("Not the operator!"); return; }
   if (!socket.connected) { alert("Connection lost. Refresh page."); return; }
@@ -945,6 +865,7 @@ document.getElementById("masterVol").oninput = e => { localMaster = e.target.val
 document.getElementById("crossfadeA").addEventListener("change", e => crossfadeMs.A = parseInt(e.target.value) * 1000);
 document.getElementById("crossfadeB").addEventListener("change", e => crossfadeMs.B = parseInt(e.target.value) * 1000);
 
+// ── VOLUME / FADE ENGINE ────────────────────────────────
 function applyVolumes() {
   if (!isCrossfading.A) audio.A.volume = roomVol.A * localMaster;
   if (!isCrossfading.B) audio.B.volume = roomVol.B * localMaster;
@@ -987,37 +908,36 @@ function shouldCrossfade(channel, newSrc) {
   return hadTrack && srcChanged && cfTime > 0 && audioUnlocked;
 }
 
-// NEW: Fade in function for play from pause
+// ── FILE PLAYBACK + CROSSFADE ───────────────────────────
 async function fadeAudioFileIn(channel) {
   const cfTime = crossfadeMs[channel];
   if (cfTime <= 0) return audio[channel].play().catch(console.warn);
-  
+
   const el = audio[channel];
   const targetVol = roomVol[channel] * localMaster;
-  
+
   abortTransition(channel);
   isCrossfading[channel] = true;
-  
+
   const half = cfTime / 2;
   el.volume = 0;
   await el.play().catch(console.warn);
-  
+
   if (half > 0) await runFade(channel, 0, targetVol, half, v => el.volume = v);
   isCrossfading[channel] = false;
   console.log(`✅ FADE IN COMPLETE on ${channel}`);
 }
 
-// NEW: Fade out function for pause
 async function fadeAudioFileOut(channel) {
   const cfTime = crossfadeMs[channel];
   if (cfTime <= 0) return audio[channel].pause();
-  
+
   const el = audio[channel];
   const half = cfTime / 2;
-  
+
   abortTransition(channel);
   isCrossfading[channel] = true;
-  
+
   if (half > 0) await runFade(channel, el.volume, 0, half, v => el.volume = v);
   el.pause();
   isCrossfading[channel] = false;
@@ -1027,11 +947,11 @@ async function fadeAudioFileOut(channel) {
 function handleAudioFile(channel, newSrc, forceTransition = false) {
   const targetVol = roomVol[channel] * localMaster;
   const cfTime = crossfadeMs[channel];
-  
-  // Check for normal crossfade OR forced transition
-  const shouldFadE = shouldCrossfade(channel, newSrc) || forceTransition;
-  
-  if (shouldFadE && !audio[channel].ended && cfTime > 0) {
+
+  // Crossfade on source change OR when the server signals a transition (next/prev/playTrack)
+  const shouldFade = shouldCrossfade(channel, newSrc) || forceTransition;
+
+  if (shouldFade && !audio[channel].ended && cfTime > 0) {
     crossfadeFile(channel, newSrc, targetVol, cfTime);
   } else {
     abortTransition(channel);
@@ -1071,20 +991,20 @@ async function crossfadeFile(channel, newSrc, targetVol, cfTime) {
   console.log(`✅ CROSSFADE COMPLETE on ${channel}`);
 }
 
-// NEW: Fade in function for YouTube play from pause
+// ── YOUTUBE PLAYBACK + CROSSFADE ────────────────────────
 async function fadeYoutubeIn(channel) {
   const cfTime = crossfadeMs[channel];
   if (cfTime <= 0) return ytPlayers[channel]?.playVideo();
-  
+
   const player = ytPlayers[channel];
   const targetVol = roomVol[channel] * localMaster * 100;
-  
+
   abortTransition(channel);
   isCrossfading[channel] = true;
-  
+
   player.playVideo();
   player.setVolume(0);
-  
+
   const half = cfTime / 2;
   if (half > 0) await runFade(channel, 0, targetVol, half, v => player.setVolume(v));
   player.unMute();
@@ -1092,18 +1012,17 @@ async function fadeYoutubeIn(channel) {
   console.log(`✅ YOUTUBE FADE IN COMPLETE on ${channel}`);
 }
 
-// NEW: Fade out function for YouTube pause
 async function fadeYoutubeOut(channel) {
   const cfTime = crossfadeMs[channel];
   if (cfTime <= 0) return ytPlayers[channel]?.pauseVideo();
-  
+
   const player = ytPlayers[channel];
   const tv100 = player.getVolume?.() ?? 100;
   const half = cfTime / 2;
-  
+
   abortTransition(channel);
   isCrossfading[channel] = true;
-  
+
   if (half > 0) await runFade(channel, tv100, 0, half, v => player.setVolume(v));
   player.pauseVideo();
   isCrossfading[channel] = false;
@@ -1124,9 +1043,9 @@ function handleYouTube(channel, newSrc, forceTransition = false) {
 
   if (ytPlayers[channel]) {
     const playing = ytPlayers[channel].getPlayerState?.() === 1;
-    const shouldFadE = shouldCrossfade(channel, newSrc) || forceTransition;
-    
-    if (shouldFadE && playing && cfTime > 0) {
+    const shouldFade = shouldCrossfade(channel, newSrc) || forceTransition;
+
+    if (shouldFade && playing && cfTime > 0) {
       crossfadeYouTube(channel, newSrc, targetVol, cfTime);
       return;
     }
@@ -1189,15 +1108,15 @@ async function crossfadeYouTube(channel, newSrc, targetVol, cfTime) {
   console.log(`✅ YOUTUBE CROSSFADE COMPLETE on ${channel}`);
 }
 
-// UPDATED: stopChannel now accepts forceTransition parameter
+// ── STOP (with fade-out support) ────────────────────────
 function stopChannel(channel, forceTransition = false) {
   const cfTime = crossfadeMs[channel];
-  
+
   if (forceTransition && cfTime > 0) {
     // Fade out before stopping
     abortTransition(channel);
     isCrossfading[channel] = true;
-    
+
     if (channelType[channel] === "file") {
       const half = cfTime / 2;
       runFade(channel, audio[channel].volume, 0, half, v => audio[channel].volume = v).then(() => {
@@ -1230,6 +1149,7 @@ function cleanupChannel(channel) {
   currentTrackSrc[channel] = null;
 }
 
+// ── UI HELPERS ──────────────────────────────────────────
 function updateRepeatButtons(repA, repB) {
   const btnA = document.getElementById("repeatA");
   const btnB = document.getElementById("repeatB");
@@ -1254,23 +1174,13 @@ function paint(ch, id) {
   document.getElementById("count" + id).textContent = ch.tracks.length;
 }
 
+// ── TRACK-END POLLING (backup for native 'ended' events) ─
 setInterval(() => {
-  ["A", "B"].forEach(channel => {
-    const audioEl = audio[channel];
-    if (audioEl && channelType[channel] === "file" && !audioEl.paused && !audioEl.ended) {
-      const elapsed = Math.floor(audioEl.currentTime);
-      if (elapsed % 2 === 0) {
-        socket.emit("sync", { token: djToken });
-      }
-    }
-    if (ytPlayers[channel] && channelType[channel] === "youtube") {
-      const state = ytPlayers[channel].getPlayerState?.();
-      if (state === 1) {
-        socket.emit("sync", { token: djToken });
-      }
-    }
+  ["A","B"].forEach(ch => {
+    if (channelType[ch] === "file" && !audio[ch].paused && audio[ch].ended) socket.emit("trackEnded", ch);
+    else if (ytPlayers[ch]?.getPlayerState?.() === 0) socket.emit("trackEnded", ch);
   });
-}, 30000);
+}, 1000);
 </script>
 </body>
 </html>
